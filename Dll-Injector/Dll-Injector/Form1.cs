@@ -9,20 +9,49 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
+using Microsoft.Win32.SafeHandles;
+using Dll_Injector.Native;
+using Dll_Injector.Methods;
 
 namespace Dll_Injector
 {
     public partial class Form1 : Form
     {
+        private static Process m_injectorprocess;
         private List<Process> processList = new List<Process>();
         private string selectedDll;
+        ProcessArchitecture pa_dll = ProcessArchitecture.Unknown;
+                
+        public static Process GetProcess()
+        {
+            return m_injectorprocess;
+        }
 
         public Form1()
         {
             InitializeComponent();
-            Text += (IsX86Injector()) ? " 32Bit Mode" : " 64Bit Mode";
+            m_injectorprocess = Process.GetCurrentProcess();
+
+            InitListView();
+
+            if ((GetProcessArchitecture() == ProcessArchitecture.x86))
+                Text += " - 32Bit";
+
+            if (m_injectorprocess.GetIntegrityLevel() == IntegrityLevel.High)
+                Text += " - Privileged";
 
             RefreshProcesslist();
+        }
+
+        private void InitListView()
+        {
+            lvProcessList.Clear();
+            lvProcessList.View = View.Details;
+            lvProcessList.Columns.Add("ProcessId", -2);
+            lvProcessList.Columns.Add("ProcessName", 240);
+            lvProcessList.Columns.Add("Arch", -2);
+            lvProcessList.Columns.Add("ILevel", -2);
         }
 
         private void btRefreshProcesses_Click(object sender, EventArgs e)
@@ -44,112 +73,97 @@ namespace Dll_Injector
             {
                 selectedDll = openFileDialog.FileName;
                 tbSelectedDll.Text = openFileDialog.SafeFileName;
-            } 
-        }
+            }
 
-        private void clbProcesslist_ItemCheck(object sender, ItemCheckEventArgs e)
-        {
-            if (e.NewValue == CheckState.Checked)
-                for (int ix = 0; ix < clbProcesslist.Items.Count; ++ix)
-                    if (e.Index != ix) clbProcesslist.SetItemChecked(ix, false);
-        }   
-
-        private bool IsX86Injector()
-        {
-            return (IntPtr.Size == 4);
+            pa_dll = PEFileHelper.GetArchitecture(selectedDll);
+            tbDllArchitecture.Text = pa_dll.ToString();
         }
+           
+
+        private ProcessArchitecture GetProcessArchitecture()
+        {
+            return (IntPtr.Size == 4) ? ProcessArchitecture.x86 : ProcessArchitecture.x64;
+        }
+        
 
         private void RefreshProcesslist()
         {
-            clbProcesslist.DataSource = null;
+            lvProcessList.Items.Clear();
             processList.Clear();
 
             Process[] processes = Process.GetProcesses();
-            foreach (Process p in processes)
+            foreach (Process process in processes)
             {
-                IntPtr handle = Kernel32.OpenProcess((uint)Kernel32.ProcessAccessType.PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)p.Id);
-                bool x86Process;
-                Kernel32.IsWow64Process(handle, out x86Process);
-                Kernel32.CloseHandle(handle);
-
-                if (!(IsX86Injector() == x86Process))
-                {
-                    continue;
-                }
-
-                if(cbOnlyWindowed.Checked)
-                {
-                    if(p.MainWindowHandle == (IntPtr)0)
-                    {
-                        continue;
-                    }
-                }
-
-                // too many of these
-                if (p.ProcessName == "svchost")
+                SafeProcessHandle hProcess = Kernel32.OpenProcess((uint)ProcessAccessType.PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)process.Id);
+                if (hProcess.IsInvalid)
                     continue;
 
-                processList.Add(p);
-            }
-
-            ((ListBox)clbProcesslist).DataSource = processList;
-            ((ListBox)clbProcesslist).DisplayMember = "ProcessName";
-            ((ListBox)clbProcesslist).ValueMember = "Id";  
-        }        
+                ProcessArchitecture arch = ProcessExtensions.GetArchitecture(hProcess);
 
         
+                // no x86 -> x64 injection, it is complicated and unnecessesary
+                if (arch == ProcessArchitecture.x64) { 
+                    if (GetProcessArchitecture() == ProcessArchitecture.x86)
+                        continue;
+                }
+
+                // check if process has any windows
+                if(cbOnlyWindowed.Checked){
+                    if(process.MainWindowHandle == (IntPtr)0)
+                        continue;                    
+                }
+                                
+                // too many of those
+                if (process.ProcessName == "svchost")
+                    continue;
+
+                // skip the injector process
+                if (process.Id == Kernel32.GetCurrentProcessId())
+                    continue;
+
+                processList.Add(process);
+
+                ListViewItem lvm = new ListViewItem(new[] { process.Id.ToString(), process.ProcessName, arch.ToString(), ProcessExtensions.GetIntegrityLevel(hProcess).ToString()});
+                lvProcessList.Items.Add(lvm);
+                hProcess.Close();
+            }
+        }        
+
 
         private void btInject_Click(object sender, EventArgs e)
         {
             if (selectedDll == null) return;
 
-            foreach(Process target in clbProcesslist.CheckedItems)
-            {            
-                // 1 Verbindung zu Zielprozess herstellen (Handle)
-                uint access = (uint)(Kernel32.ProcessAccessType.PROCESS_CREATE_THREAD | 
-                    Kernel32.ProcessAccessType.PROCESS_VM_WRITE | Kernel32.ProcessAccessType.PROCESS_VM_OPERATION);
-                IntPtr handle = Kernel32.OpenProcess(access, false, (uint)target.Id);
-                if (handle == null) continue;
-
-                // 2 Speicheradresse der Funktion LoadLibrary bestimmen 
-                IntPtr LoadLibraryFn = Kernel32.GetProcAddress(Kernel32.GetModuleHandle("kernel32.dll"), "LoadLibraryA");
-                if (LoadLibraryFn == null)
+            foreach (ListViewItem lvm in lvProcessList.CheckedItems)
+            {
+                if (pa_dll != processList[lvm.Index].GetArchitecture())
                 {
-                    Kernel32.CloseHandle(handle);
-                    continue;
-                }                
-
-                // 3 Speicher im Zielprozess reservieren
-                IntPtr address = Kernel32.VirtualAllocEx(handle, (IntPtr)null, Convert.ToUInt32(selectedDll.Length), 
-                    Kernel32.AllocationType.Reserve | Kernel32.AllocationType.Commit, Kernel32.MemoryProtection.ReadWrite);
-                if (address == null)
-                {
-                    Kernel32.CloseHandle(handle);
-                    continue;
+                    MessageBox.Show("One ore more architectures dont match", "Aborting injection");
+                    return;
                 }
+            }
 
-                // 4 DLL Pfad in den reservierten Speicher schreiben
-                byte[] buffer = Encoding.ASCII.GetBytes(selectedDll);
-                bool success = Kernel32.WriteProcessMemory(handle, address, buffer, (uint)buffer.Length, 0);
-                if (!success)
-                {
-                    Kernel32.CloseHandle(handle);
-                    continue;
-                }
+            InjectonMethod method = new LoadLibrary(LoadLibrary.Option.CreateRemoteThread);
 
-                // 5 Thread im Zielprozess erstellen und dort LoadLibrary mit der Adresse als Parameter ausführen
-                IntPtr tmp;
-                IntPtr thread = Kernel32.CreateRemoteThread(handle, (IntPtr)null, 0, LoadLibraryFn, address, 0, out tmp);
-                if (thread == null)
-                {
-                    Kernel32.CloseHandle(handle);
-                    continue;
-                }
+            btInject.Enabled = false;
+            foreach(ListViewItem lvm in lvProcessList.CheckedItems)
+            {
+                method.Inject(processList[lvm.Index], selectedDll);  
+            }
+            Thread.Sleep(100);
+            btInject.Enabled = true;
+        }
 
-                // 6 Verbindungen schließen
-                Kernel32.CloseHandle(thread);
-                Kernel32.CloseHandle(handle);
-            }           
-        }       
+        private void button1_Click(object sender, EventArgs e)
+        {
+            foreach (ListViewItem lvm in lvProcessList.CheckedItems)
+            {
+                ModuleInformation modInfo;
+                processList[lvm.Index].GetModuleInformation("kernel32.dll", out modInfo);
+                IntPtr ll = PEFileHelper.GetFunctionAddress(modInfo, "LoadLibraryA");
+            }
+        }
+
+    
     }
 }
