@@ -1,6 +1,6 @@
 ﻿namespace Dll_Injector
 {
-    partial class Form1
+    partial class Injector
     {
         /// <summary>
         /// Erforderliche Designervariable.

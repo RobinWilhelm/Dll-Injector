@@ -16,7 +16,7 @@ using Dll_Injector.Methods;
 
 namespace Dll_Injector
 {
-    public partial class Form1 : Form
+    public partial class Injector : Form
     {
         private static Process m_injectorprocess;
         private List<Process> processList = new List<Process>();
@@ -28,7 +28,7 @@ namespace Dll_Injector
             return m_injectorprocess;
         }
 
-        public Form1()
+        public Injector()
         {
             InitializeComponent();
             m_injectorprocess = Process.GetCurrentProcess();

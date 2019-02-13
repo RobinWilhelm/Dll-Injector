@@ -61,22 +61,14 @@ namespace Dll_Injector
 
         // the handle will need PROCESS_QUERY_LIMITED_INFORMATION
         public static ProcessArchitecture GetArchitecture(SafeProcessHandle hProcess)
-        {
-            try
+        {            
+            bool x86Process;
+            bool result = Kernel32.IsWow64Process(hProcess, out x86Process);
+            if (!result)
             {
-                bool x86Process;
-                bool result = Kernel32.IsWow64Process(hProcess, out x86Process);
-                if (!result)
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "IsWow64Process Error");
-                }
-                return (x86Process) ? ProcessArchitecture.x86 : ProcessArchitecture.x64;
-
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "IsWow64Process Error");
             }
-            catch (Win32Exception e)
-            {
-                return ProcessArchitecture.Unknown;
-            }
+            return (x86Process) ? ProcessArchitecture.x86 : ProcessArchitecture.x64;                   
         }   
 
         // opens a handle with PROCESS_QUERY_LIMITED_INFORMATION
@@ -248,7 +240,7 @@ namespace Dll_Injector
                 return false;
 
             NtStatus result;
-            if (target.Id == Form1.GetProcess().Id)
+            if (target.Id == Injector.GetProcess().Id)
             {
                 result = Ntdll.RtlQueryProcessDebugInformation((int)target.Id, (uint)RtlQueryProcessDebugInformationFunctionFlags.PDI_MODULES, (IntPtr)p_rdi);
             }
@@ -293,11 +285,11 @@ namespace Dll_Injector
                 // parse name and path
                 string path = Encoding.UTF8.GetString(dmi.ImageName, 0, 256);
                 int idx = path.IndexOf('\0');
-                if (idx >= 0) path = path.Substring(0, idx);
+                if (idx >= 0)
+                    path = path.Substring(0, idx);
 
                 string name = path.Substring(dmi.ModuleNameOffset, path.Length - dmi.ModuleNameOffset);
                
-
                 if (name.ToUpper() == module_name.ToUpper())
                 {
                     moduleInformation.ImageBase = dmi.ImageBase;
@@ -380,6 +372,8 @@ namespace Dll_Injector
                         Winnt.IMAGE_OPTIONAL_HEADER64 ioh64 = ReadMemory<Winnt.IMAGE_OPTIONAL_HEADER64>(hProcess, p_ioh);
                         p_et = hmodule + (int)ioh64.ExportTable.VirtualAddress;
                         break;
+                    default:
+                        return IntPtr.Zero;
                 }
 
                 if (p_et == IntPtr.Zero)
