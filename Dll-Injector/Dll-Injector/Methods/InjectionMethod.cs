@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Windows.Forms;
+using System.Drawing;
 
 namespace Dll_Injector.Methods
 {
@@ -11,12 +13,17 @@ namespace Dll_Injector.Methods
     {
         protected InjectonMethod()
         {
-
+            
         }
-               
-        public virtual bool Inject(Process target, string dll_path)
+
+        public virtual void PopulateUI(Control control)
         {
             throw new NotImplementedException();
-        }
+        }     
+
+        public virtual bool Execute(Process target, string dll_path)
+        {
+            throw new NotImplementedException();
+        }        
     }
 }

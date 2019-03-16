@@ -11,7 +11,7 @@ using System.Collections;
 using Microsoft.Win32.SafeHandles;
 using Dll_Injector.Native;
 
-namespace Dll_Injector
+namespace Dll_Injector.Utils
 {
     public enum ProcessArchitecture
     {
@@ -147,40 +147,7 @@ namespace Dll_Injector
             }              
         }
 
-        #region ReadWriteMemory
-        // will open and close a handle with PROCESS_VM_READ
-        public static T ReadMemory<T>(this Process process, IntPtr address)
-        {          
-            SafeProcessHandle hProcess = process.Open((uint)(ProcessAccessType.PROCESS_VM_READ));
-            T buffer = ReadMemory<T>(hProcess, address);
-            hProcess.Dispose();
-            return buffer;
-        }
-
-        // will open and close a handle with PROCESS_VM_WRITE
-        public static void WriteMemory<T>(this Process process, ref T data, IntPtr address)
-        {
-            SafeProcessHandle hProcess = process.Open((uint)(ProcessAccessType.PROCESS_VM_READ));         
-            WriteMemory<T>(hProcess, ref data, address);
-            hProcess.Dispose();    
-        }
-
-        // will open and close a handle with PROCESS_VM_READ
-        public static byte[] ReadMemory(this Process process, IntPtr address, uint size)
-        {
-            SafeProcessHandle hProcess = process.Open((uint)(ProcessAccessType.PROCESS_VM_READ));
-            byte[] buffer = ReadMemory(hProcess, address, size);
-            hProcess.Dispose();
-            return buffer;
-        }
-
-        // will open and close a handle with PROCESS_VM_WRITE
-        public static void WriteMemory(this Process process, ref byte[] data, IntPtr address)
-        {
-            SafeProcessHandle hProcess = process.Open((uint)(ProcessAccessType.PROCESS_VM_READ));
-            WriteMemory(hProcess, ref data, address);
-            hProcess.Dispose();
-        }
+        #region ReadWriteMemory      
 
         // the given handle needs PROCESS_VM_READ 
         public static T ReadMemory<T>(SafeProcessHandle hProcess, IntPtr address)
@@ -191,13 +158,13 @@ namespace Dll_Injector
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "ReadProcessMemory failed");
             }
-            return Utils.Deserialize<T>(buffer);
+            return BinaryConverter.Deserialize<T>(buffer);
         }
 
         // the given handle needs PROCESS_VM_WRITE 
         public static void WriteMemory<T>(SafeProcessHandle hProcess, ref T data, IntPtr address)
         {
-            byte[] buffer = Utils.Serialize<T>(data);
+            byte[] buffer = BinaryConverter.Serialize<T>(data);
 
             bool result = Kernel32.WriteProcessMemory(hProcess, address, buffer, (uint)buffer.Length, 0);
             if (!result)
@@ -219,7 +186,7 @@ namespace Dll_Injector
         }
 
         // the given handle needs PROCESS_VM_WRITE 
-        public static void WriteMemory(SafeProcessHandle hProcess, ref byte[] data, IntPtr address)
+        public static void WriteMemory(SafeProcessHandle hProcess, byte[] data, IntPtr address)
         {
             bool result = Kernel32.WriteProcessMemory(hProcess, address, data, (uint)data.Length, 0);
             if (!result)
@@ -228,8 +195,7 @@ namespace Dll_Injector
             }
         }
         #endregion ReadWriteMemory
-
-
+        
         // does not open a handle
         public static bool GetModuleInformation(this Process target, string module_name, out ModuleInformation moduleInformation)
         {
@@ -318,8 +284,7 @@ namespace Dll_Injector
                 return IntPtr.Zero;
             }
         }
-
-
+        
         // will open a handle with PROCESS_VM_READ and PROCESS_QUERY_LIMITED_INFORMATION access rights        
         public static IntPtr GetFunctionAddress(this Process process, IntPtr hmodule, string func_name)
         {
@@ -425,177 +390,6 @@ namespace Dll_Injector
             {
                 return IntPtr.Zero;
             } 
-        }
-    
+        }    
     }
-
-    class PEFileHelper
-    {
-
-        public static UInt32 RVAtoPhysical(List<Winnt.IMAGE_SECTION_HEADER> sections, UInt32 rva)
-        {
-            foreach (var section in sections)
-            {
-                if (rva >= section.VirtualAddress && rva <= section.VirtualAddress + section.VirtualSize)
-                {
-                    // bingo
-                    return rva - section.VirtualAddress + section.PointerToRawData;
-                }
-            }
-            return 0;
-        }
-
-        // does not open a handle
-        public static IntPtr GetFunctionAddress(ModuleInformation modInfo, string func_name)
-        {
-            using (FileStream fs = new FileStream(modInfo.Path, FileMode.Open, FileAccess.Read))
-            {
-                if(!fs.CanRead)
-                    return IntPtr.Zero;
-
-                ProcessArchitecture arch = ProcessArchitecture.Unknown;
-
-                Winnt.IMAGE_DOS_HEADER idh = Utils.StreamToType<Winnt.IMAGE_DOS_HEADER>(fs);
-                if (idh.e_magic_byte != Winnt.IMAGE_DOS_SIGNATURE)
-                    return IntPtr.Zero;
-
-                // reposition the stream position
-                fs.Seek(idh.e_lfanew, SeekOrigin.Begin);
-
-                Winnt.IMAGE_FILE_HEADER ifh = Utils.StreamToType<Winnt.IMAGE_FILE_HEADER>(fs);
-                if (ifh.Magic != Winnt.IMAGE_NT_SIGNATURE)
-                    return IntPtr.Zero;
-
-                if (ifh.Machine == Winnt.MachineType.I386)
-                {
-                    arch = ProcessArchitecture.x86;
-                }                    
-                else if (ifh.Machine == Winnt.MachineType.x64)
-                {
-                    arch = ProcessArchitecture.x64;
-                }
-
-                UInt32 phys_ioh = (UInt32)(idh.e_lfanew + Marshal.SizeOf(typeof(Winnt.IMAGE_FILE_HEADER)));
-                fs.Seek(phys_ioh, SeekOrigin.Begin); // position the stream at the start of the IMAGE_FILE_HEADER
-                UInt32 phys_ish = 0; // physical address of the image_section_headers
-                UInt32 rva_et = 0; // relative virtual address of the export table
-
-                // Get address of export table
-                switch (arch)
-                {
-                    case ProcessArchitecture.x86:
-                        Winnt.IMAGE_OPTIONAL_HEADER32 ioh32 = Utils.StreamToType<Winnt.IMAGE_OPTIONAL_HEADER32>(fs);
-                        phys_ish = (UInt32)(phys_ioh + Marshal.SizeOf(typeof(Winnt.IMAGE_OPTIONAL_HEADER32)));
-                        rva_et = ioh32.ExportTable.VirtualAddress;
-                        break;
-                    case ProcessArchitecture.x64:
-                        Winnt.IMAGE_OPTIONAL_HEADER64 ioh64 = Utils.StreamToType<Winnt.IMAGE_OPTIONAL_HEADER64>(fs);
-                        phys_ish = (UInt32)(phys_ioh + Marshal.SizeOf(typeof(Winnt.IMAGE_OPTIONAL_HEADER64)));
-                        rva_et = ioh64.ExportTable.VirtualAddress;
-                        break;
-                }
-
-                if (rva_et == 0)
-                {
-                    return IntPtr.Zero;
-                }
-                
-                List<Winnt.IMAGE_SECTION_HEADER> sections = new List<Winnt.IMAGE_SECTION_HEADER>();                
-                for(uint section_counter = 0;; section_counter++)
-                {
-                    fs.Seek(phys_ish + (section_counter * Marshal.SizeOf(typeof(Winnt.IMAGE_SECTION_HEADER))), SeekOrigin.Begin);
-                    Winnt.IMAGE_SECTION_HEADER ish = Utils.StreamToType<Winnt.IMAGE_SECTION_HEADER>(fs);
-                                        
-                    if (ish.Name[0] == '\0') // we have reached the end
-                    {
-                        break;
-                    }
-                    else
-                    {
-                        sections.Add(ish);
-                    }  
-                }
-
-                UInt32 phys_et = RVAtoPhysical(sections, rva_et); // physical address of export table
-
-                fs.Seek(phys_et, SeekOrigin.Begin); // postition the stream at the start of export table
-                Winnt.IMAGE_EXPORT_DIRECTORY ied = Utils.StreamToType<Winnt.IMAGE_EXPORT_DIRECTORY>(fs);
-
-                // now we parse the names similar to the other ProcessExtensions.GetFunctionAddress
-                UInt32 phys_funcs = RVAtoPhysical(sections, ied.AddressOfFunctions);
-                UInt32 phys_names = RVAtoPhysical(sections, ied.AddressOfNames);
-                UInt32 phys_odinals = RVAtoPhysical(sections, ied.AddressOfNameOrdinals);
-
-                byte[] name_rva_table = new byte[ied.NumberOfNames * 4]; // 4 byte per rva
-                fs.Seek(phys_names, SeekOrigin.Begin);
-                fs.Read(name_rva_table, 0, (int)(ied.NumberOfNames * 4));
-
-                byte[] funcaddress_rva_table = new byte[ied.NumberOfFunctions * 4]; // 4 byte per rva
-                fs.Seek(phys_funcs, SeekOrigin.Begin);
-                fs.Read(funcaddress_rva_table, 0, (int)(ied.NumberOfFunctions * 4));
-
-                byte[] odinal_rva_table = new byte[ied.NumberOfNames * 2]; // 2 byte per index
-                fs.Seek(phys_odinals, SeekOrigin.Begin);
-                fs.Read(odinal_rva_table, 0, (int)(ied.NumberOfNames * 2));
-
-                // walk through the function names
-                for (int i = 0; i < ied.NumberOfNames; i++)
-                {
-                    UInt32 phys_funcname = RVAtoPhysical(sections, BitConverter.ToUInt32(name_rva_table, i * 4));
-
-                    byte[] namebuffer = new byte[64];
-                    fs.Seek(phys_funcname, SeekOrigin.Begin);
-                    fs.Read(namebuffer, 0, namebuffer.Length);
-
-                    var str = System.Text.Encoding.Default.GetString(namebuffer);
-                    int idx = str.IndexOf('\0');
-                    if (idx >= 0) str = str.Substring(0, idx);
-
-                    if (str == func_name)
-                    {
-                        ushort offset = BitConverter.ToUInt16(odinal_rva_table, i * 2);
-                        int func_rva = BitConverter.ToInt32(funcaddress_rva_table, offset * 4);
-                        
-                        return modInfo.ImageBase + func_rva;
-                    }
-                }
-                return IntPtr.Zero;
-            }
-        }         
-
-        // does not open a handle
-        public static ProcessArchitecture GetArchitecture(string path)
-        {
-            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))
-            {
-                if (!fs.CanRead)
-                    return ProcessArchitecture.Unknown;
-
-                Winnt.IMAGE_DOS_HEADER idh = Utils.StreamToType<Winnt.IMAGE_DOS_HEADER>(fs);
-                if (idh.e_magic_byte != Winnt.IMAGE_DOS_SIGNATURE)
-                {
-                    return ProcessArchitecture.Unknown;
-                }                    
-
-                // reposition the stream position
-                fs.Seek(idh.e_lfanew, SeekOrigin.Begin);
-
-                Winnt.IMAGE_FILE_HEADER ifh = Utils.StreamToType<Winnt.IMAGE_FILE_HEADER>(fs);
-                if (ifh.Magic != Winnt.IMAGE_NT_SIGNATURE)
-                {
-                    return ProcessArchitecture.Unknown;
-                }                    
-
-                if (ifh.Machine == Winnt.MachineType.I386)
-                {
-                    return ProcessArchitecture.x86;
-                }
-                else if (ifh.Machine == Winnt.MachineType.x64)
-                {
-                    return ProcessArchitecture.x64;
-                }                    
-            }
-            return ProcessArchitecture.Unknown;
-        }
-    }   
 }

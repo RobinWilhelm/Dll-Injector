@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.IO;
 
-namespace Dll_Injector
+namespace Dll_Injector.Utils
 {
-    class Utils
+    static class BinaryConverter
     {
         public static byte[] Serialize<T>(T data)
         {
-            var size = Marshal.SizeOf(typeof(T));
+            var size = Marshal.SizeOf<T>();
             var array = new byte[size];
             var ptr = Marshal.AllocHGlobal(size);
             Marshal.StructureToPtr(data, ptr, true);
@@ -23,19 +23,20 @@ namespace Dll_Injector
 
         public static T Deserialize<T>(byte[] bytes)
         {
-            var size = Marshal.SizeOf(typeof(T));
+            var size = Marshal.SizeOf<T>();
             var ptr = Marshal.AllocHGlobal(size);
             Marshal.Copy(bytes, 0, ptr, size);
             var s = (T)Marshal.PtrToStructure(ptr, typeof(T));
             Marshal.FreeHGlobal(ptr);
             return s;          
-        }
+        }        
 
         public static T StreamToType<T>(Stream stream)
         {
-            byte[] bytes = new byte[Marshal.SizeOf(typeof(T))];
+            int size = Marshal.SizeOf<T>();
+            byte[] bytes = new byte[size];
 
-            if (stream.Read(bytes, 0, Marshal.SizeOf(typeof(T))) < Marshal.SizeOf(typeof(T)))
+            if (stream.Read(bytes, 0, size) < size)
             {
                 throw new Exception();
             }                
@@ -45,6 +46,6 @@ namespace Dll_Injector
             handle.Free();
 
             return theStructure;                                   
-        }               
+        }    
     }
 }

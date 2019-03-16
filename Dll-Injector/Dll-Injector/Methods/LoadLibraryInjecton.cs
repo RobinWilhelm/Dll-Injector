@@ -8,31 +8,43 @@ using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using Dll_Injector.Native;
 using System.ComponentModel;
+using Dll_Injector.Utils;
+using System.Windows.Forms;
 
 namespace Dll_Injector.Methods
-{  
-    class LoadLibrary : InjectonMethod
-    {
-        public enum Option
-        {
-            CreateRemoteThread = 0,
-        };
+{
 
-        public LoadLibrary(Option option) : base()
+    class LoadLibraryInjection : InjectonMethod
+    {
+        private RadioButton rbCreateRemoteThread;
+        
+        public LoadLibraryInjection() : base()
         {
-            m_option = option;
+            
+        }
+        
+        public override bool Execute(Process target, string dll_path)
+        {
+            if (rbCreateRemoteThread.Checked)
+            {
+                return CreateRemoteThread_LoadLibrary(target, dll_path);
+            }              
+            
+            return false;
         }
 
-        public override bool Inject(Process target, string dll_path)
+        public override void PopulateUI(Control control)
         {
-            switch (m_option)
-            {
-                case Option.CreateRemoteThread:
-                    return CreateRemoteThread_LoadLibrary(target, dll_path);
-
-                default:
-                    return false;
-            }
+            rbCreateRemoteThread = new RadioButton();
+            rbCreateRemoteThread.AutoSize = true;
+            rbCreateRemoteThread.Location = new System.Drawing.Point(7, 20);
+            rbCreateRemoteThread.Name = "rbCreateRemoteThread";
+            rbCreateRemoteThread.Size = new System.Drawing.Size(127, 17);
+            rbCreateRemoteThread.TabIndex = 0;
+            rbCreateRemoteThread.TabStop = true;
+            rbCreateRemoteThread.Text = "CreateRemoteThread";
+            rbCreateRemoteThread.UseVisualStyleBackColor = true;
+            control.Controls.Add(rbCreateRemoteThread);    
         }
 
         private bool CreateRemoteThread_LoadLibrary(Process target, string dll)
@@ -83,6 +95,6 @@ namespace Dll_Injector.Methods
             }        
         }
 
-        private Option m_option;
+       
     }
 }

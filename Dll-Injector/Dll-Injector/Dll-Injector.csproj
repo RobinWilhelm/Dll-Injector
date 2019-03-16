@@ -79,11 +79,11 @@
     <OutputPath>bin\x86\Debug\</OutputPath>
     <DefineConstants>TRACE;DEBUG</DefineConstants>
     <DebugType>full</DebugType>
-    <PlatformTarget>x86</PlatformTarget>
+    <PlatformTarget>AnyCPU</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
-    <Prefer32Bit>true</Prefer32Bit>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x86'">
     <OutputPath>bin\x86\Release\</OutputPath>
@@ -111,6 +111,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Methods\InjectionMethod.cs" />
+    <Compile Include="Methods\ReflectiveInjection.cs" />
     <Compile Include="Native\Advapi32.cs" />
     <Compile Include="InjectorGUI.cs">
       <SubType>Form</SubType>
@@ -118,16 +119,19 @@
     <Compile Include="InjectorGUI.Designer.cs">
       <DependentUpon>InjectorGUI.cs</DependentUpon>
     </Compile>
-    <Compile Include="Methods\LoadLibraryInjector.cs" />
+    <Compile Include="Methods\LoadLibraryInjecton.cs" />
     <Compile Include="Native\Handle.cs" />
     <Compile Include="Native\Kernel32.cs" />
     <Compile Include="Native\Ntdll.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Native\Psapi.cs" />
+    <Compile Include="Utils\ArrayExtentions.cs" />
+    <Compile Include="Utils\PEFileHelper.cs" />
+    <Compile Include="Utils\PEHeader.cs" />
     <Compile Include="Utils\RemoteProcess.cs" />
     <Compile Include="Utils\TypeSize.cs" />
-    <Compile Include="Utils\Utils.cs" />
+    <Compile Include="Utils\BinaryConverter.cs" />
     <Compile Include="Native\Winnt.cs" />
     <EmbeddedResource Include="InjectorGUI.resx">
       <DependentUpon>InjectorGUI.cs</DependentUpon>

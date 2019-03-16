@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
+using Dll_Injector.Utils;
 
 namespace Dll_Injector.Native
 {
@@ -38,6 +39,9 @@ enum RtlQueryProcessDebugInformationFunctionFlags : uint
         public ushort ModuleNameOffset;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
         public byte [] ImageName;
+
+        // size of the structure
+        public static int size = TypeSize<DEBUG_MODULE_INFORMATION>.Size;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -45,6 +49,9 @@ enum RtlQueryProcessDebugInformationFunctionFlags : uint
     {
         public uint Count;
         public DEBUG_MODULE_INFORMATION DbgModInfo; // It is actually an array of DEBUG_MODULE_INFORMATION, but i dont think it is possible to build that in c#
+
+        // size of the structure
+        public static int size = TypeSize<DEBUG_MODULES_STRUCT>.Size;
     }
   
 
@@ -82,6 +89,9 @@ enum RtlQueryProcessDebugInformationFunctionFlags : uint
         public IntPtr Reserved2;
         public IntPtr Reserved3;
         public IntPtr Reserved4;
+
+        // size of the structure
+        public static int StructureSize = Marshal.SizeOf<RTL_DEBUG_INFORMATION>();
     }
 
 class Ntdll

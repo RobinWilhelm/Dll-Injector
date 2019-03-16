@@ -5,7 +5,7 @@ using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Dll_Injector
+namespace Dll_Injector.Utils
 {
     public static class TypeSize<T>
     {

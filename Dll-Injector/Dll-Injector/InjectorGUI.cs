@@ -13,32 +13,36 @@ using System.Threading;
 using Microsoft.Win32.SafeHandles;
 using Dll_Injector.Native;
 using Dll_Injector.Methods;
+using Dll_Injector.Utils;
+using System.Runtime.InteropServices;
 
 namespace Dll_Injector
 {
     public partial class Injector : Form
     {
-        private static Process m_injectorprocess;
+        private static Process injectorprocess;
         private List<Process> processList = new List<Process>();
         private string selectedDll;
         ProcessArchitecture pa_dll = ProcessArchitecture.Unknown;
+        InjectonMethod injection;
                 
         public static Process GetProcess()
         {
-            return m_injectorprocess;
+            return injectorprocess;
         }
 
         public Injector()
         {
             InitializeComponent();
-            m_injectorprocess = Process.GetCurrentProcess();
+
+            injectorprocess = Process.GetCurrentProcess();
 
             InitListView();
 
             if ((GetProcessArchitecture() == ProcessArchitecture.x86))
                 Text += " - 32Bit";
 
-            if (m_injectorprocess.GetIntegrityLevel() == IntegrityLevel.High)
+            if (injectorprocess.GetIntegrityLevel() == IntegrityLevel.High)
                 Text += " - Privileged";
 
             RefreshProcesslist();
@@ -79,15 +83,14 @@ namespace Dll_Injector
             tbDllArchitecture.Text = pa_dll.ToString();
         }
            
-
         private ProcessArchitecture GetProcessArchitecture()
-        {
-            return (IntPtr.Size == 4) ? ProcessArchitecture.x86 : ProcessArchitecture.x64;
-        }
-        
+        {  
+            return (Environment.Is64BitProcess) ? ProcessArchitecture.x64 : ProcessArchitecture.x86;
+        }        
 
         private void RefreshProcesslist()
         {
+            lbInjectionreturn.Text = "";
             lvProcessList.Items.Clear();
             processList.Clear();
 
@@ -128,42 +131,71 @@ namespace Dll_Injector
                 hProcess.Close();
             }
         }        
-
-
+        
         private void btInject_Click(object sender, EventArgs e)
         {
-            if (selectedDll == null) return;
-
+            if (selectedDll == null || injection == null) return;
+            
             foreach (ListViewItem lvm in lvProcessList.CheckedItems)
             {
                 if (pa_dll != processList[lvm.Index].GetArchitecture())
                 {
-                    MessageBox.Show("One ore more architectures dont match", "Aborting injection");
+                    MessageBox.Show("One or more architectures dont match", "Aborting injection");
                     return;
                 }
             }
 
-            InjectonMethod method = new LoadLibrary(LoadLibrary.Option.CreateRemoteThread);
-
-            btInject.Enabled = false;
+            int failedcounter = 0;
             foreach(ListViewItem lvm in lvProcessList.CheckedItems)
             {
-                method.Inject(processList[lvm.Index], selectedDll);  
+                if(!injection.Execute(processList[lvm.Index], selectedDll))
+                {
+                    failedcounter++;
+                }
             }
-            Thread.Sleep(100);
-            btInject.Enabled = true;
-        }
 
+            if(failedcounter == 0)
+            {
+                lbInjectionreturn.ForeColor = Color.Green;
+                lbInjectionreturn.Text = "Success";
+            }
+            else
+            {
+                lbInjectionreturn.ForeColor = Color.Red;
+                lbInjectionreturn.Text = "Failures: " + failedcounter.ToString();
+            }
+        }
+            
+
+        // DEBUG
         private void button1_Click(object sender, EventArgs e)
-        {
+        { 
             foreach (ListViewItem lvm in lvProcessList.CheckedItems)
             {
                 ModuleInformation modInfo;
                 processList[lvm.Index].GetModuleInformation("kernel32.dll", out modInfo);
-                IntPtr ll = PEFileHelper.GetFunctionAddress(modInfo, "LoadLibraryA");
+                IntPtr gfa1 = modInfo.ImageBase + (int)PEFileHelper.GetFunctionOffsetFromDisk(modInfo.Path, "LoadLibraryA");
             }
         }
 
-    
+        private void rbLoadLibrary_CheckedChanged(object sender, EventArgs e)
+        {
+            if(rbLoadLibrary.Checked ==  true)
+            {
+                this.gbInjectionOptions.Controls.Clear();
+                injection = new LoadLibraryInjection();
+                injection.PopulateUI(this.gbInjectionOptions);
+            }      
+        }
+            
+        private void rbReflective_CheckedChanged(object sender, EventArgs e)
+        {
+            if(rbReflective.Checked == true)
+            {
+                this.gbInjectionOptions.Controls.Clear();
+                injection = new ReflectiveInjection();
+                injection.PopulateUI(this.gbInjectionOptions);
+            }
+        }    
     }
 }

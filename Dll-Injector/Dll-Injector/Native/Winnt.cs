@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
+using Dll_Injector.Utils;
 
 namespace Dll_Injector.Native
 {
@@ -349,7 +350,7 @@ namespace Dll_Injector.Native
         MaximumNtStatus = 0xffffffff
     }
 
-    unsafe class Winnt
+    class Winnt
     {
         public const int SECURITY_MANDATORY_UNTRUSTED_RID = (0x00000000);
         public const int SECURITY_MANDATORY_LOW_RID = (0x00001000);
@@ -378,11 +379,16 @@ namespace Dll_Injector.Native
             public UInt16 e_cs;      // Initial (relative) CS value
             public UInt16 e_lfarlc;      // File address of relocation table
             public UInt16 e_ovno;    // Overlay number
-            public fixed UInt16 e_res1[4];    // Reserved words
+            [MarshalAs(UnmanagedType.ByValArray, ArraySubType = UnmanagedType.U2 ,SizeConst = 4)]
+            public UInt16 [] e_res1;    // Reserved words
             public UInt16 e_oemid;       // OEM identifier (for e_oeminfo)
             public UInt16 e_oeminfo;     // OEM information; e_oemid specific
-            public fixed UInt16 e_res2[10];    // Reserved words
+            [MarshalAs(UnmanagedType.ByValArray, ArraySubType = UnmanagedType.U2 , SizeConst = 10)]
+            public UInt16 [] e_res2;    // Reserved words
             public Int32 e_lfanew;      // File address of new exe header
+
+            // size of the structure
+            public static int StructureSize = Marshal.SizeOf<IMAGE_DOS_HEADER>();
         }
 
         public const UInt32 IMAGE_NT_SIGNATURE = 0x4550;
@@ -398,6 +404,9 @@ namespace Dll_Injector.Native
             public UInt32 NumberOfSymbols;
             public UInt16 SizeOfOptionalHeader;
             public UInt16 Characteristics;
+
+            // size of the structure
+            public static int StructureSize = Marshal.SizeOf<IMAGE_FILE_HEADER>();
         }
 
         public enum MachineType : ushort
@@ -592,6 +601,9 @@ namespace Dll_Injector.Native
 
             [FieldOffset(216)]
             public IMAGE_DATA_DIRECTORY Reserved;
+
+            // size of the structure
+            public static int StructureSize = Marshal.SizeOf<IMAGE_OPTIONAL_HEADER32>();
         }
 
 
@@ -732,6 +744,9 @@ namespace Dll_Injector.Native
 
             [FieldOffset(232)]
             public IMAGE_DATA_DIRECTORY Reserved;
+
+            // size of the structure
+            public static int StructureSize = Marshal.SizeOf<IMAGE_OPTIONAL_HEADER64>();
         }
 
         [StructLayout(LayoutKind.Explicit)]
@@ -811,6 +826,9 @@ namespace Dll_Injector.Native
             {
                 get { return new string(Name); }
             }
+
+            // size of the structure
+            public static int StructureSize = Marshal.SizeOf<IMAGE_SECTION_HEADER>();
         }
         [Flags]
         public enum DataSectionFlags : uint

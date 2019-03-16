@@ -38,8 +38,13 @@
             this.lvProcessList = new System.Windows.Forms.ListView();
             this.tbDllArchitecture = new System.Windows.Forms.TextBox();
             this.button1 = new System.Windows.Forms.Button();
-            this.radioButton1 = new System.Windows.Forms.RadioButton();
-            this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.rbLoadLibrary = new System.Windows.Forms.RadioButton();
+            this.rbReflective = new System.Windows.Forms.RadioButton();
+            this.lbInjectionreturn = new System.Windows.Forms.Label();
+            this.gbInjectionOptions = new System.Windows.Forms.GroupBox();
+            this.tbLoadFnName = new System.Windows.Forms.TextBox();
+            this.lbLoadFnName = new System.Windows.Forms.Label();
+            this.gbInjectionOptions.SuspendLayout();
             this.SuspendLayout();
             // 
             // btRefreshProcesses
@@ -75,7 +80,7 @@
             // 
             this.btInject.Location = new System.Drawing.Point(446, 367);
             this.btInject.Name = "btInject";
-            this.btInject.Size = new System.Drawing.Size(343, 23);
+            this.btInject.Size = new System.Drawing.Size(180, 23);
             this.btInject.TabIndex = 6;
             this.btInject.Text = "Inject";
             this.btInject.UseVisualStyleBackColor = true;
@@ -139,33 +144,75 @@
             this.button1.UseVisualStyleBackColor = true;
             this.button1.Click += new System.EventHandler(this.button1_Click);
             // 
-            // radioButton1
+            // rbLoadLibrary
             // 
-            this.radioButton1.AutoSize = true;
-            this.radioButton1.Location = new System.Drawing.Point(446, 93);
-            this.radioButton1.Name = "radioButton1";
-            this.radioButton1.Size = new System.Drawing.Size(80, 17);
-            this.radioButton1.TabIndex = 14;
-            this.radioButton1.TabStop = true;
-            this.radioButton1.Text = "LoadLibrary";
-            this.radioButton1.UseVisualStyleBackColor = true;
+            this.rbLoadLibrary.AutoSize = true;
+            this.rbLoadLibrary.Location = new System.Drawing.Point(453, 94);
+            this.rbLoadLibrary.Name = "rbLoadLibrary";
+            this.rbLoadLibrary.Size = new System.Drawing.Size(80, 17);
+            this.rbLoadLibrary.TabIndex = 14;
+            this.rbLoadLibrary.TabStop = true;
+            this.rbLoadLibrary.Text = "LoadLibrary";
+            this.rbLoadLibrary.UseVisualStyleBackColor = true;
+            this.rbLoadLibrary.CheckedChanged += new System.EventHandler(this.rbLoadLibrary_CheckedChanged);
             // 
-            // groupBox1
+            // rbReflective
             // 
-            this.groupBox1.Location = new System.Drawing.Point(447, 135);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(343, 216);
-            this.groupBox1.TabIndex = 15;
-            this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "Options";
+            this.rbReflective.AutoSize = true;
+            this.rbReflective.Location = new System.Drawing.Point(541, 94);
+            this.rbReflective.Name = "rbReflective";
+            this.rbReflective.Size = new System.Drawing.Size(73, 17);
+            this.rbReflective.TabIndex = 16;
+            this.rbReflective.TabStop = true;
+            this.rbReflective.Text = "Reflective";
+            this.rbReflective.UseVisualStyleBackColor = true;
+            this.rbReflective.CheckedChanged += new System.EventHandler(this.rbReflective_CheckedChanged);
             // 
-            // Form1
+            // lbInjectionreturn
+            // 
+            this.lbInjectionreturn.AutoSize = true;
+            this.lbInjectionreturn.Location = new System.Drawing.Point(655, 372);
+            this.lbInjectionreturn.Name = "lbInjectionreturn";
+            this.lbInjectionreturn.Size = new System.Drawing.Size(73, 13);
+            this.lbInjectionreturn.TabIndex = 18;
+            this.lbInjectionreturn.Text = "injectionreturn";
+            // 
+            // gbInjectionOptions
+            // 
+            this.gbInjectionOptions.Controls.Add(this.lbLoadFnName);
+            this.gbInjectionOptions.Controls.Add(this.tbLoadFnName);
+            this.gbInjectionOptions.Location = new System.Drawing.Point(453, 127);
+            this.gbInjectionOptions.Name = "gbInjectionOptions";
+            this.gbInjectionOptions.Size = new System.Drawing.Size(336, 216);
+            this.gbInjectionOptions.TabIndex = 19;
+            this.gbInjectionOptions.TabStop = false;
+            // 
+            // tbLoadFnName
+            // 
+            this.tbLoadFnName.Location = new System.Drawing.Point(9, 32);
+            this.tbLoadFnName.Name = "tbLoadFnName";
+            this.tbLoadFnName.Size = new System.Drawing.Size(321, 20);
+            this.tbLoadFnName.TabIndex = 0;
+            this.tbLoadFnName.Text = "ReflectiveLoader";
+            // 
+            // lbLoadFnName
+            // 
+            this.lbLoadFnName.AutoSize = true;
+            this.lbLoadFnName.Location = new System.Drawing.Point(6, 16);
+            this.lbLoadFnName.Name = "lbLoadFnName";
+            this.lbLoadFnName.Size = new System.Drawing.Size(109, 13);
+            this.lbLoadFnName.TabIndex = 1;
+            this.lbLoadFnName.Text = "Load Function Name:";
+            // 
+            // Injector
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(807, 449);
-            this.Controls.Add(this.groupBox1);
-            this.Controls.Add(this.radioButton1);
+            this.Controls.Add(this.gbInjectionOptions);
+            this.Controls.Add(this.lbInjectionreturn);
+            this.Controls.Add(this.rbReflective);
+            this.Controls.Add(this.rbLoadLibrary);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.tbDllArchitecture);
             this.Controls.Add(this.lvProcessList);
@@ -177,8 +224,10 @@
             this.Controls.Add(this.label1);
             this.Controls.Add(this.btRefreshProcesses);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
-            this.Name = "Form1";
+            this.Name = "Injector";
             this.Text = "Dll Injector";
+            this.gbInjectionOptions.ResumeLayout(false);
+            this.gbInjectionOptions.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -195,8 +244,12 @@
         private System.Windows.Forms.ListView lvProcessList;
         private System.Windows.Forms.TextBox tbDllArchitecture;
         private System.Windows.Forms.Button button1;
-        private System.Windows.Forms.RadioButton radioButton1;
-        private System.Windows.Forms.GroupBox groupBox1;
+        private System.Windows.Forms.RadioButton rbLoadLibrary;
+        private System.Windows.Forms.RadioButton rbReflective;
+        private System.Windows.Forms.Label lbInjectionreturn;
+        private System.Windows.Forms.GroupBox gbInjectionOptions;
+        private System.Windows.Forms.Label lbLoadFnName;
+        private System.Windows.Forms.TextBox tbLoadFnName;
     }
 }
 
