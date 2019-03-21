@@ -30,6 +30,7 @@ namespace Dll_Injector.Utils
 
     public static class ProcessExtensions
     {
+        #region wrapped kernel functions  
         public static SafeProcessHandle Open(this Process process, uint accessType)
         {
             SafeProcessHandle hProcess = Kernel32.OpenProcess(accessType, false, (uint)process.Id);
@@ -71,6 +72,53 @@ namespace Dll_Injector.Utils
             return (x86Process) ? ProcessArchitecture.x86 : ProcessArchitecture.x64;                   
         }   
 
+        // the given handle needs PROCESS_VM_READ 
+        public static T ReadMemory<T>(SafeProcessHandle hProcess, IntPtr address)
+        {
+            byte[] buffer = new byte[Marshal.SizeOf<T>()];
+            bool result = Kernel32.ReadProcessMemory(hProcess, address, buffer, (uint)buffer.Length, 0);
+            if (!result)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "ReadProcessMemory failed");
+            }
+            return BinaryConverter.Deserialize<T>(buffer);
+        }
+
+        // the given handle needs PROCESS_VM_WRITE 
+        public static void WriteMemory<T>(SafeProcessHandle hProcess, ref T data, IntPtr address)
+        {
+            byte[] buffer = BinaryConverter.Serialize<T>(data);
+
+            bool result = Kernel32.WriteProcessMemory(hProcess, address, buffer, (uint)buffer.Length, 0);
+            if (!result)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "WriteProcessMemory failed");
+            }
+        }
+
+        // the given handle needs PROCESS_VM_READ 
+        public static byte[] ReadMemory(SafeProcessHandle hProcess, IntPtr address, uint size)
+        {
+            byte[] buffer = new byte[size];
+            bool result = Kernel32.ReadProcessMemory(hProcess, address, buffer, size, 0);
+            if (!result)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "ReadProcessMemory failed");
+            }
+            return buffer;
+        }
+
+        // the given handle needs PROCESS_VM_WRITE 
+        public static void WriteMemory(SafeProcessHandle hProcess, byte[] data, IntPtr address)
+        {
+            bool result = Kernel32.WriteProcessMemory(hProcess, address, data, (uint)data.Length, 0);
+            if (!result)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "WriteProcessMemory failed");
+            }
+        }
+        #endregion wrapped kernel functions  
+
         // opens a handle with PROCESS_QUERY_LIMITED_INFORMATION
         public static IntegrityLevel GetIntegrityLevel(this Process process)
         {
@@ -81,7 +129,7 @@ namespace Dll_Injector.Utils
                 hProcess.Close();
                 return il;
             }
-            catch(Win32Exception e)
+            catch (Win32Exception e)
             {
                 return IntegrityLevel.Unknown;
             }
@@ -145,57 +193,8 @@ namespace Dll_Injector.Utils
             {
                 return IntegrityLevel.Unknown;
             }              
-        }
+        }        
 
-        #region ReadWriteMemory      
-
-        // the given handle needs PROCESS_VM_READ 
-        public static T ReadMemory<T>(SafeProcessHandle hProcess, IntPtr address)
-        {
-            byte[] buffer = new byte[TypeSize<T>.Size];
-            bool result = Kernel32.ReadProcessMemory(hProcess, address, buffer, (uint)buffer.Length, 0);
-            if (!result)
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "ReadProcessMemory failed");
-            }
-            return BinaryConverter.Deserialize<T>(buffer);
-        }
-
-        // the given handle needs PROCESS_VM_WRITE 
-        public static void WriteMemory<T>(SafeProcessHandle hProcess, ref T data, IntPtr address)
-        {
-            byte[] buffer = BinaryConverter.Serialize<T>(data);
-
-            bool result = Kernel32.WriteProcessMemory(hProcess, address, buffer, (uint)buffer.Length, 0);
-            if (!result)
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "WriteProcessMemory failed");
-            }
-        }
-
-        // the given handle needs PROCESS_VM_READ 
-        public static byte[] ReadMemory(SafeProcessHandle hProcess, IntPtr address, uint size)
-        {
-            byte[] buffer = new byte[size];
-            bool result = Kernel32.ReadProcessMemory(hProcess, address, buffer, size, 0);
-            if (!result)
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "ReadProcessMemory failed");
-            }
-            return buffer;
-        }
-
-        // the given handle needs PROCESS_VM_WRITE 
-        public static void WriteMemory(SafeProcessHandle hProcess, byte[] data, IntPtr address)
-        {
-            bool result = Kernel32.WriteProcessMemory(hProcess, address, data, (uint)data.Length, 0);
-            if (!result)
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "WriteProcessMemory failed");
-            }
-        }
-        #endregion ReadWriteMemory
-        
         // does not open a handle
         public static bool GetModuleInformation(this Process target, string module_name, out ModuleInformation moduleInformation)
         {

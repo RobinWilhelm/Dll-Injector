@@ -111,6 +111,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Methods\InjectionMethod.cs" />
+    <Compile Include="Methods\ManualMapInjection.cs" />
     <Compile Include="Methods\ReflectiveInjection.cs" />
     <Compile Include="Native\Advapi32.cs" />
     <Compile Include="InjectorGUI.cs">

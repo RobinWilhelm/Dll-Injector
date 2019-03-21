@@ -7,7 +7,8 @@ using System.Threading.Tasks;
 
 namespace Dll_Injector.Utils
 {
-    public static class TypeSize<T>
+    /* Dont use
+     public static class TypeSize<T>
     {
         public readonly static int Size;
 
@@ -20,4 +21,5 @@ namespace Dll_Injector.Utils
             Size = (int)dm.Invoke(null, null);
         }
     }
+    */
 }

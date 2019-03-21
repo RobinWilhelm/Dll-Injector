@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\Dll-Injector",
+    "\\Dll-Injector\\Dll-Injector",
+    "\\Dll-Injector\\Dll-Injector\\Shellcode",
+    "\\Dll-Injector\\Dll-Injector\\Utils"
+  ],
+  "SelectedNode": "\\Dll-Injector\\Dll-Injector\\Utils\\PEHeader.cs",
+  "PreviewInSolutionExplorer": false
+}

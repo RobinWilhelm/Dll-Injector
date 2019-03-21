@@ -41,7 +41,7 @@ enum RtlQueryProcessDebugInformationFunctionFlags : uint
         public byte [] ImageName;
 
         // size of the structure
-        public static int size = TypeSize<DEBUG_MODULE_INFORMATION>.Size;
+        public static int StructureSize = Marshal.SizeOf<DEBUG_MODULE_INFORMATION>();
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -51,7 +51,7 @@ enum RtlQueryProcessDebugInformationFunctionFlags : uint
         public DEBUG_MODULE_INFORMATION DbgModInfo; // It is actually an array of DEBUG_MODULE_INFORMATION, but i dont think it is possible to build that in c#
 
         // size of the structure
-        public static int size = TypeSize<DEBUG_MODULES_STRUCT>.Size;
+        public static int StructureSize = Marshal.SizeOf<DEBUG_MODULES_STRUCT>();
     }
   
 

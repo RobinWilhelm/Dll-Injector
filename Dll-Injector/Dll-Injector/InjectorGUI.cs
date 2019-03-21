@@ -167,7 +167,7 @@ namespace Dll_Injector
         }
             
 
-        // DEBUG
+        // DEBUGGING ONLY
         private void button1_Click(object sender, EventArgs e)
         { 
             foreach (ListViewItem lvm in lvProcessList.CheckedItems)
@@ -196,6 +196,16 @@ namespace Dll_Injector
                 injection = new ReflectiveInjection();
                 injection.PopulateUI(this.gbInjectionOptions);
             }
-        }    
+        }
+
+        private void rbManualMap_CheckedChanged(object sender, EventArgs e)
+        {
+            if (rbManualMap.Checked == true)
+            {
+                this.gbInjectionOptions.Controls.Clear();
+                injection = new ManualMapInjection();
+                injection.PopulateUI(this.gbInjectionOptions);
+            }
+        }
     }
 }

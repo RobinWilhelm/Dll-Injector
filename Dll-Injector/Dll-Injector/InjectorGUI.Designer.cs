@@ -42,8 +42,9 @@
             this.rbReflective = new System.Windows.Forms.RadioButton();
             this.lbInjectionreturn = new System.Windows.Forms.Label();
             this.gbInjectionOptions = new System.Windows.Forms.GroupBox();
-            this.tbLoadFnName = new System.Windows.Forms.TextBox();
             this.lbLoadFnName = new System.Windows.Forms.Label();
+            this.tbLoadFnName = new System.Windows.Forms.TextBox();
+            this.rbManualMap = new System.Windows.Forms.RadioButton();
             this.gbInjectionOptions.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -159,7 +160,7 @@
             // rbReflective
             // 
             this.rbReflective.AutoSize = true;
-            this.rbReflective.Location = new System.Drawing.Point(541, 94);
+            this.rbReflective.Location = new System.Drawing.Point(629, 94);
             this.rbReflective.Name = "rbReflective";
             this.rbReflective.Size = new System.Drawing.Size(73, 17);
             this.rbReflective.TabIndex = 16;
@@ -187,14 +188,6 @@
             this.gbInjectionOptions.TabIndex = 19;
             this.gbInjectionOptions.TabStop = false;
             // 
-            // tbLoadFnName
-            // 
-            this.tbLoadFnName.Location = new System.Drawing.Point(9, 32);
-            this.tbLoadFnName.Name = "tbLoadFnName";
-            this.tbLoadFnName.Size = new System.Drawing.Size(321, 20);
-            this.tbLoadFnName.TabIndex = 0;
-            this.tbLoadFnName.Text = "ReflectiveLoader";
-            // 
             // lbLoadFnName
             // 
             this.lbLoadFnName.AutoSize = true;
@@ -204,11 +197,32 @@
             this.lbLoadFnName.TabIndex = 1;
             this.lbLoadFnName.Text = "Load Function Name:";
             // 
+            // tbLoadFnName
+            // 
+            this.tbLoadFnName.Location = new System.Drawing.Point(9, 32);
+            this.tbLoadFnName.Name = "tbLoadFnName";
+            this.tbLoadFnName.Size = new System.Drawing.Size(321, 20);
+            this.tbLoadFnName.TabIndex = 0;
+            this.tbLoadFnName.Text = "ReflectiveLoader";
+            // 
+            // rbManualMap
+            // 
+            this.rbManualMap.AutoSize = true;
+            this.rbManualMap.Location = new System.Drawing.Point(539, 94);
+            this.rbManualMap.Name = "rbManualMap";
+            this.rbManualMap.Size = new System.Drawing.Size(84, 17);
+            this.rbManualMap.TabIndex = 20;
+            this.rbManualMap.TabStop = true;
+            this.rbManualMap.Text = "Manual Map";
+            this.rbManualMap.UseVisualStyleBackColor = true;
+            this.rbManualMap.CheckedChanged += new System.EventHandler(this.rbManualMap_CheckedChanged);
+            // 
             // Injector
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(807, 449);
+            this.Controls.Add(this.rbManualMap);
             this.Controls.Add(this.gbInjectionOptions);
             this.Controls.Add(this.lbInjectionreturn);
             this.Controls.Add(this.rbReflective);
@@ -250,6 +264,7 @@
         private System.Windows.Forms.GroupBox gbInjectionOptions;
         private System.Windows.Forms.Label lbLoadFnName;
         private System.Windows.Forms.TextBox tbLoadFnName;
+        private System.Windows.Forms.RadioButton rbManualMap;
     }
 }
 

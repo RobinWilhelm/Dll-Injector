@@ -44,6 +44,8 @@ namespace Dll_Injector.Methods
             rbCreateRemoteThread.TabStop = true;
             rbCreateRemoteThread.Text = "CreateRemoteThread";
             rbCreateRemoteThread.UseVisualStyleBackColor = true;
+            // this method is used by default
+            rbCreateRemoteThread.Checked = true;
             control.Controls.Add(rbCreateRemoteThread);    
         }
 
@@ -94,7 +96,6 @@ namespace Dll_Injector.Methods
                 return false;
             }        
         }
-
        
     }
 }
