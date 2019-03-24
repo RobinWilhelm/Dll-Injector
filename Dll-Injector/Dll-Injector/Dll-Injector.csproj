@@ -111,7 +111,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Methods\InjectionMethod.cs" />
-    <Compile Include="Methods\ManualMapInjection.cs" />
     <Compile Include="Methods\ReflectiveInjection.cs" />
     <Compile Include="Native\Advapi32.cs" />
     <Compile Include="InjectorGUI.cs">
@@ -127,6 +126,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Native\Psapi.cs" />
+    <Compile Include="Shellcode\Shellcode.cs" />
     <Compile Include="Utils\ArrayExtentions.cs" />
     <Compile Include="Utils\PEFileHelper.cs" />
     <Compile Include="Utils\PEHeader.cs" />

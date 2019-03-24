@@ -42,10 +42,6 @@
             this.rbReflective = new System.Windows.Forms.RadioButton();
             this.lbInjectionreturn = new System.Windows.Forms.Label();
             this.gbInjectionOptions = new System.Windows.Forms.GroupBox();
-            this.lbLoadFnName = new System.Windows.Forms.Label();
-            this.tbLoadFnName = new System.Windows.Forms.TextBox();
-            this.rbManualMap = new System.Windows.Forms.RadioButton();
-            this.gbInjectionOptions.SuspendLayout();
             this.SuspendLayout();
             // 
             // btRefreshProcesses
@@ -180,49 +176,17 @@
             // 
             // gbInjectionOptions
             // 
-            this.gbInjectionOptions.Controls.Add(this.lbLoadFnName);
-            this.gbInjectionOptions.Controls.Add(this.tbLoadFnName);
             this.gbInjectionOptions.Location = new System.Drawing.Point(453, 127);
             this.gbInjectionOptions.Name = "gbInjectionOptions";
             this.gbInjectionOptions.Size = new System.Drawing.Size(336, 216);
             this.gbInjectionOptions.TabIndex = 19;
             this.gbInjectionOptions.TabStop = false;
             // 
-            // lbLoadFnName
-            // 
-            this.lbLoadFnName.AutoSize = true;
-            this.lbLoadFnName.Location = new System.Drawing.Point(6, 16);
-            this.lbLoadFnName.Name = "lbLoadFnName";
-            this.lbLoadFnName.Size = new System.Drawing.Size(109, 13);
-            this.lbLoadFnName.TabIndex = 1;
-            this.lbLoadFnName.Text = "Load Function Name:";
-            // 
-            // tbLoadFnName
-            // 
-            this.tbLoadFnName.Location = new System.Drawing.Point(9, 32);
-            this.tbLoadFnName.Name = "tbLoadFnName";
-            this.tbLoadFnName.Size = new System.Drawing.Size(321, 20);
-            this.tbLoadFnName.TabIndex = 0;
-            this.tbLoadFnName.Text = "ReflectiveLoader";
-            // 
-            // rbManualMap
-            // 
-            this.rbManualMap.AutoSize = true;
-            this.rbManualMap.Location = new System.Drawing.Point(539, 94);
-            this.rbManualMap.Name = "rbManualMap";
-            this.rbManualMap.Size = new System.Drawing.Size(84, 17);
-            this.rbManualMap.TabIndex = 20;
-            this.rbManualMap.TabStop = true;
-            this.rbManualMap.Text = "Manual Map";
-            this.rbManualMap.UseVisualStyleBackColor = true;
-            this.rbManualMap.CheckedChanged += new System.EventHandler(this.rbManualMap_CheckedChanged);
-            // 
             // Injector
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(807, 449);
-            this.Controls.Add(this.rbManualMap);
             this.Controls.Add(this.gbInjectionOptions);
             this.Controls.Add(this.lbInjectionreturn);
             this.Controls.Add(this.rbReflective);
@@ -240,8 +204,6 @@
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Name = "Injector";
             this.Text = "Dll Injector";
-            this.gbInjectionOptions.ResumeLayout(false);
-            this.gbInjectionOptions.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -262,9 +224,6 @@
         private System.Windows.Forms.RadioButton rbReflective;
         private System.Windows.Forms.Label lbInjectionreturn;
         private System.Windows.Forms.GroupBox gbInjectionOptions;
-        private System.Windows.Forms.Label lbLoadFnName;
-        private System.Windows.Forms.TextBox tbLoadFnName;
-        private System.Windows.Forms.RadioButton rbManualMap;
     }
 }
 

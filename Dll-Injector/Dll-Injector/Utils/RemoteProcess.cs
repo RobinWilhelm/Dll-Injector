@@ -377,8 +377,7 @@ namespace Dll_Injector.Utils
                     if (str == func_name)
                     {
                         ushort offset = BitConverter.ToUInt16(odinal_rva_table, i * 2);
-                        int func_rva = BitConverter.ToInt32(funcaddress_rva_table, offset * 4);
-                        hProcess.Close();
+                        int func_rva = BitConverter.ToInt32(funcaddress_rva_table, offset * 4);                        
                         return hmodule + func_rva;
                     }
                 }

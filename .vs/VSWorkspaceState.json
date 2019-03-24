@@ -1,11 +1,10 @@
 {
   "ExpandedNodes": [
     "",
+    "\\Dll-Injector",
     "\\Dll-Injector\\Dll-Injector",
-    "\\Dll-Injector\\Dll-Injector\\Shellcode",
-    "\\Dll-Injector\\Dll-Injector\\Utils",
-    "\\ReflectiveInjection Shellcode\\ReflectiveInjection Shellcode\\src"
+    "\\Dll-Injector\\Dll-Injector\\Utils"
   ],
-  "SelectedNode": "\\ReflectiveInjection Shellcode",
+  "SelectedNode": "\\Dll-Injector",
   "PreviewInSolutionExplorer": false
 }

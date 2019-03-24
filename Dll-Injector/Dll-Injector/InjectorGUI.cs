@@ -197,15 +197,6 @@ namespace Dll_Injector
                 injection.PopulateUI(this.gbInjectionOptions);
             }
         }
-
-        private void rbManualMap_CheckedChanged(object sender, EventArgs e)
-        {
-            if (rbManualMap.Checked == true)
-            {
-                this.gbInjectionOptions.Controls.Clear();
-                injection = new ManualMapInjection();
-                injection.PopulateUI(this.gbInjectionOptions);
-            }
-        }
+              
     }
 }

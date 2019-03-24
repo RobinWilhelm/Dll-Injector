@@ -96,6 +96,9 @@ namespace Dll_Injector.Native
         public static extern UInt32 WaitForSingleObject(IntPtr hHandle, UInt32 dwMilliseconds);
 
         [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool GetExitCodeThread(IntPtr hHandle, ref uint lpExitCode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool AttachConsole(uint dwProcessId);
 
         [DllImport("kernel32.dll", SetLastError = true)]

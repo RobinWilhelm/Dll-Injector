@@ -1,7 +1,6 @@
 #include <windows.h>
 #include <stdio.h>
-
-//#define IMAGE_ORDINAL(ordinal) (ordinal & 0xFFFF)
+#include <string>   
 
 typedef BOOL (WINAPI *DllMainFunction)(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);
 typedef HMODULE(WINAPI *LoadLibraryFunction) (LPCSTR lpLibFileName);
@@ -10,12 +9,15 @@ typedef FARPROC(WINAPI *GetProcAddressFunction) (HMODULE hModule, LPCSTR lpProcN
 typedef BOOL(WINAPI *VirtualFreeFunction)(LPVOID lpAddress,	SIZE_T dwSize, DWORD  dwFreeType);
 typedef BOOL(WINAPI *VirtualProtectFunction)(LPVOID lpAddress, SIZE_T dwSize, DWORD  flNewProtect, PDWORD lpflOldProtect);
 
-
+#ifdef WIN_X86
+	typedef unsigned long Number;
+#elif WIN_X64
+	typedef unsigned long long Number;
+#endif
 
 typedef struct 
 {
 	byte* raw_module_destination;
-	DWORD size_of_raw_module;
 	// i dont want the shellcode to search for the functions if the injector already has functionality to do this
 	LoadLibraryFunction fnLoadLibrary;	 	
 	GetProcAddressFunction fnGetProcAddress;
@@ -24,12 +26,12 @@ typedef struct
 	VirtualProtectFunction fnVirtualProtect;
 } ShellcodeInformation;
 
-PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
+DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 {		   
 	IMAGE_DOS_HEADER* idh = (IMAGE_DOS_HEADER*)modinfo->raw_module_destination;
 
 	if (idh->e_magic != IMAGE_DOS_SIGNATURE) {
-		return  0;
+		return 0;
 	}			
 					
 	IMAGE_NT_HEADERS* headers = (IMAGE_NT_HEADERS*)(modinfo->raw_module_destination + idh->e_lfanew);
@@ -41,6 +43,10 @@ PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
 	// reserve memory for the complete module
 	byte* module_destination = (byte*)modinfo->fnVirtualAlloc((LPVOID)headers->OptionalHeader.ImageBase, headers->OptionalHeader.SizeOfImage, MEM_RESERVE, PAGE_READWRITE);
 	
+	if (!module_destination)
+	{
+		module_destination = (byte*)modinfo->fnVirtualAlloc(0, headers->OptionalHeader.SizeOfImage, MEM_RESERVE, PAGE_READWRITE);
+	}
 
 	//
 	// Map headers into memory
@@ -59,7 +65,9 @@ PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
 	//						
 	for (int section_counter = 0; section_counter < new_headers->FileHeader.NumberOfSections; section_counter++)
 	{
-		IMAGE_SECTION_HEADER* ish = (IMAGE_SECTION_HEADER *)((DWORD)&new_headers->OptionalHeader + new_headers->FileHeader.SizeOfOptionalHeader + section_counter * sizeof(IMAGE_SECTION_HEADER));
+
+		IMAGE_SECTION_HEADER* ish = (IMAGE_SECTION_HEADER *)((Number)&new_headers->OptionalHeader + new_headers->FileHeader.SizeOfOptionalHeader + section_counter * sizeof(IMAGE_SECTION_HEADER));
+		
 		byte* section_destination = 0;
 		if (ish->SizeOfRawData != 0)
 		{
@@ -95,38 +103,38 @@ PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
 				}	
 				ish->SizeOfRawData = new_headers->OptionalHeader.SizeOfUninitializedData;
 			}	 			
-		}
-
-		// store the final destination of the section back in the header
-		ish->Misc.PhysicalAddress = (DWORD)section_destination;				
+		}			  
 	}
 
 
 	//
 	// Perform Relocations
 	//	 
-	DWORD delta = (DWORD)(module_destination - new_headers->OptionalHeader.ImageBase);
-	IMAGE_DATA_DIRECTORY* relocation_directory_entry = &new_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
-	IMAGE_BASE_RELOCATION* relocation_table = (IMAGE_BASE_RELOCATION*)(module_destination + relocation_directory_entry->VirtualAddress);
+	DWORD delta = ((DWORD)module_destination - headers->OptionalHeader.ImageBase);
+	
+	if (delta != 0) 
+	{  
+		IMAGE_DATA_DIRECTORY* relocation_directory_entry = &new_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
+		IMAGE_BASE_RELOCATION* relocation_table = (IMAGE_BASE_RELOCATION*)(module_destination + relocation_directory_entry->VirtualAddress);
 
-	while (relocation_table->VirtualAddress > 0)
-	{
-		for (int relocations = 0; relocations < ((relocation_table->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2); relocations++)
+		while (relocation_table->VirtualAddress > 0)
 		{
-			WORD reloc_info = *(WORD*)(relocation_table + sizeof(IMAGE_BASE_RELOCATION) + (relocations * sizeof(WORD)));
-			int type, offset;
-
-			type = reloc_info >> 12;
-			offset = reloc_info & 0xfff;
-
-			if (type == IMAGE_REL_BASED_HIGHLOW)
+			for (int relocations = 0; relocations < ((relocation_table->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2); relocations++)
 			{
-				*(DWORD*)(module_destination + relocation_table->VirtualAddress + offset) += delta;
-			}  
-		}  	
-		relocation_table += relocation_table->SizeOfBlock;
-	}
+				WORD reloc_info = *(WORD*)(relocation_table + sizeof(IMAGE_BASE_RELOCATION) + (relocations * sizeof(WORD)));
+				int type, offset;
 
+				type = reloc_info >> 12;
+				offset = reloc_info & 0xfff;
+
+				if (type == IMAGE_REL_BASED_HIGHLOW)
+				{
+					*(DWORD*)(module_destination + relocation_table->VirtualAddress + offset) += delta;
+				}
+			}
+			relocation_table += relocation_table->SizeOfBlock;
+		}
+	}
 
 	//
 	// Resolve Imports
@@ -136,7 +144,7 @@ PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
 
 	for (int import_module_index = 0; import_module_index  < ((import_directory_entry->Size / sizeof(IMAGE_IMPORT_DESCRIPTOR) - 1)); import_module_index++)
 	{
-		HMODULE import_module = modinfo->fnLoadLibrary((char*)((DWORD)module_destination + import_table[import_module_index].Name));
+		HMODULE import_module = modinfo->fnLoadLibrary((char*)((Number)module_destination + import_table[import_module_index].Name));
 			   
 		if (!import_module){
 			return 0;
@@ -152,21 +160,14 @@ PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
 			{
 				//by ordinal
 				WORD ordinal = IMAGE_ORDINAL(originalThunkTable[import_function_index].u1.Ordinal);
-#ifdef WIN_X86
-				thunkTable[import_function_index].u1.Function = (DWORD)modinfo->fnGetProcAddress(import_module, MAKEINTRESOURCE(ordinal));
-#elif WIN_X64
-				thunkTable[import_function_index].u1.Function = (ULONGLONG)modinfo->fnGetProcAddress(import_module, MAKEINTRESOURCE(ordinal));
-#endif		
+				thunkTable[import_function_index].u1.Function = (Number)modinfo->fnGetProcAddress(import_module, MAKEINTRESOURCE(ordinal));
 			}
 			else
 			{
 				// by name
 				IMAGE_IMPORT_BY_NAME* thunkdata = (IMAGE_IMPORT_BY_NAME*)(module_destination + originalThunkTable[import_function_index].u1.AddressOfData);   				
-#ifdef WIN_X86
-				thunkTable[import_function_index].u1.Function = (DWORD)modinfo->fnGetProcAddress(import_module, thunkdata->Name);
-#elif WIN_X64
-				thunkTable[import_function_index].u1.Function = (ULONGLONG)modinfo->fnGetProcAddress(import_module, thunkdata->Name);
-#endif		   		   
+				thunkTable[import_function_index].u1.Function = (Number)modinfo->fnGetProcAddress(import_module, thunkdata->Name);
+		   		   
 			}
 		}
 	}
@@ -177,7 +178,7 @@ PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
 	//						
 	for (int section_counter = 0; section_counter < new_headers->FileHeader.NumberOfSections; section_counter++)
 	{
-		IMAGE_SECTION_HEADER* ish = (IMAGE_SECTION_HEADER *)((DWORD)&new_headers->OptionalHeader + new_headers->FileHeader.SizeOfOptionalHeader + section_counter * sizeof(IMAGE_SECTION_HEADER));
+		IMAGE_SECTION_HEADER* ish = (IMAGE_SECTION_HEADER *)((Number)&new_headers->OptionalHeader + new_headers->FileHeader.SizeOfOptionalHeader + section_counter * sizeof(IMAGE_SECTION_HEADER));
 		DWORD memoryprotection = 0;
 
 		if (ish->Characteristics & IMAGE_SCN_MEM_DISCARDABLE)
@@ -243,8 +244,8 @@ PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
 		}
 
 		DWORD oldprot;
-		if (!modinfo->fnVirtualProtect((LPVOID)ish->Misc.PhysicalAddress, ish->SizeOfRawData, memoryprotection, &oldprot))
-		{
+		if (!modinfo->fnVirtualProtect((LPVOID)(module_destination + ish->VirtualAddress), ish->SizeOfRawData, memoryprotection, &oldprot))
+		{	
 			return 0;
 		}		   
 	}	
@@ -252,17 +253,26 @@ PVOID LoadLibShellcode(ShellcodeInformation* modinfo)
 	//
 	// call Entrypoint
 	//
-	DWORD dllmainaddress = (DWORD)module_destination + new_headers->OptionalHeader.AddressOfEntryPoint;	
+	Number dllmainaddress = (Number)module_destination + new_headers->OptionalHeader.AddressOfEntryPoint;	
 	((DllMainFunction)dllmainaddress)((HINSTANCE)module_destination, DLL_PROCESS_ATTACH, NULL);
 
-	return module_destination;
+	
+	modinfo->raw_module_destination = module_destination;
+	return 1337;
 }	  	  	 
 					   
 void END_SHELLCODE(void) {}
 
 void Test()
 {
+#ifdef WIN_X86
 	const char* dll = "C:\\Users\\Robin\\Documents\\Visual Studio 2017\\Projects\\TestDll\\Release\\TestDll.dll";
+#endif
+
+#ifdef WIN_X64
+	const char* dll = "C:\\Users\\Robin\\Documents\\Visual Studio 2017\\Projects\\TestDll\\x64\\Release\\TestDll.dll";
+#endif // WIN_X64
+
 	ShellcodeInformation* info = new ShellcodeInformation();
 
 	FILE* file;
@@ -282,20 +292,62 @@ void Test()
 	info->fnGetProcAddress = (GetProcAddressFunction)GetProcAddress;
 	info->fnVirtualProtect = (VirtualProtectFunction)VirtualProtect;
 
+
 	LoadLibShellcode(info);
+	LoadLibShellcode(info);
+	//LoadLibShellcode(info);
+	//LoadLibShellcode(info);
 }
 
 
-int main(int argc, char *argv[])
+void CreateCSharpByteArray()
 {
-
-
-#ifdef _DEBUG
-	Test(); 
+#ifdef WIN_X86
+	const char* fileName = "charp_array_x86.cs";
 #endif
 
+#ifdef WIN_X64
+	const char* fileName = "charp_array_x64.cs";
+#endif // WIN_X64
+
+	long codelength = (long)END_SHELLCODE - (long)LoadLibShellcode;
+
 	FILE *output_file;
+	fopen_s(&output_file, fileName, "w");
+
 	
+#ifdef WIN_X86
+	std::string decl = "byte[] shellcode_x86 = new byte[] {";
+#endif
+
+#ifdef WIN_X64
+	std::string decl = "byte[] shellcode_x64 = new byte[] {";
+#endif // WIN_X64
+
+	char buf[5];
+	for (long idx = 0; idx < codelength; idx++)
+	{ 	
+		int num = (int)((byte*)LoadLibShellcode)[idx];
+		//decl += std::to_string(num);
+
+		sprintf_s(buf, "%X", num);
+		decl += "0x";
+		decl += buf;
+		if(idx != codelength -1)
+			decl += ", ";  
+	}
+
+	decl += "};";
+
+	fwrite(decl.c_str(), decl.length(), 1, output_file);
+
+	fclose(output_file);
+}
+
+void CreateBinary()
+{
+	FILE *output_file;
+
 #ifdef WIN_X86
 	const char* fileName = "shellcode_x86.bin";
 #endif
@@ -303,10 +355,22 @@ int main(int argc, char *argv[])
 #ifdef WIN_X64
 	const char* fileName = "shellcode_x64.bin";
 #endif // WIN_X64
-						
-	fopen_s(&output_file, fileName, "w");
-    fwrite(LoadLibShellcode, (long)END_SHELLCODE - (long)LoadLibShellcode, 1, output_file);
-    fclose(output_file);
 
+	fopen_s(&output_file, fileName, "w");
+	fwrite(LoadLibShellcode, (long)END_SHELLCODE - (long)LoadLibShellcode, 1, output_file);
+	fclose(output_file);
+}
+
+int main(int argc, char *argv[])
+{		
+
+
+
+#ifdef _DEBUG
+	Test(); 
+#else					
+	// make sure all breakpoints are deleted
+	CreateCSharpByteArray();
+#endif
     return 0;
 }
