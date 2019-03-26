@@ -13,23 +13,23 @@ namespace Dll_Injector.Utils
     {
         // does not open a handle
         // retrieves the offset of a function in a DLL
-        public static uint GetFunctionOffsetFromDisk(string modulepath, string func_name)
+        public static uint GetFunctionOffsetFromDisk(string modulepath, string func_name, bool get_as_rva = false)
         {
             using (FileStream fs = new FileStream(modulepath, FileMode.Open, FileAccess.Read))
             {
-                return GetFunctionOffsetFromModuleStream(fs, func_name);
+                return GetFunctionOffsetFromModuleStream(fs, func_name, get_as_rva);
             }
         }
 
-        public static uint GetFunctionOffsetFromBytes(byte[] modulebytes, string func_name)
+        public static uint GetFunctionOffsetFromBytes(byte[] modulebytes, string func_name, bool get_as_rva = false)
         {
             using (var memstream = new MemoryStream(modulebytes))
             {
-                return GetFunctionOffsetFromModuleStream(memstream, func_name);
+                return GetFunctionOffsetFromModuleStream(memstream, func_name, get_as_rva);
             }
         }
 
-        public static uint GetFunctionOffsetFromModuleStream(Stream modulestream, string func_name)
+        public static uint GetFunctionOffsetFromModuleStream(Stream modulestream, string func_name, bool get_as_rva = false)
         {
             // load in the pe header
             PEHeader peh = PEHeader.CreateFromStream(modulestream);
@@ -94,8 +94,16 @@ namespace Dll_Injector.Utils
                     ushort offset = BitConverter.ToUInt16(odinal_rva_table, i * 2);
                     uint func_rva = BitConverter.ToUInt32(funcaddress_rva_table, offset * 4);
 
-                    // Convert the RVA to the offset into the array and return
-                    return peh.ConvertRVAtoPhysical(func_rva);
+                    if (get_as_rva)
+                    {
+                        return func_rva;
+                    }
+                    else
+                    {
+                        // Convert the RVA to the offset into the array and return
+                        return peh.ConvertRVAtoPhysical(func_rva);
+                    }
+                   
                 }
             }
             return 0;

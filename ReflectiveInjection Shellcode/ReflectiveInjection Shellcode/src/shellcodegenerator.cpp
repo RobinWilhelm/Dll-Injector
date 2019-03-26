@@ -10,9 +10,9 @@ typedef BOOL(WINAPI *VirtualFreeFunction)(LPVOID lpAddress,	SIZE_T dwSize, DWORD
 typedef BOOL(WINAPI *VirtualProtectFunction)(LPVOID lpAddress, SIZE_T dwSize, DWORD  flNewProtect, PDWORD lpflOldProtect);
 
 #ifdef WIN_X86
-	typedef unsigned long Number;
+	typedef unsigned long PtrInt;
 #elif WIN_X64
-	typedef unsigned long long Number;
+	typedef unsigned long long PtrInt;
 #endif
 
 typedef struct 
@@ -25,6 +25,12 @@ typedef struct
 	VirtualFreeFunction fnVirtualFree;
 	VirtualProtectFunction fnVirtualProtect;
 } ShellcodeInformation;
+
+typedef struct
+{
+	WORD	offset : 12;
+	WORD	type : 4;
+} IMAGE_RELOC;
 
 DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 {		   
@@ -42,7 +48,7 @@ DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 					
 	// reserve memory for the complete module
 	byte* module_destination = (byte*)modinfo->fnVirtualAlloc((LPVOID)headers->OptionalHeader.ImageBase, headers->OptionalHeader.SizeOfImage, MEM_RESERVE, PAGE_READWRITE);
-	
+	//byte* module_destination = 0;
 	if (!module_destination)
 	{
 		module_destination = (byte*)modinfo->fnVirtualAlloc(0, headers->OptionalHeader.SizeOfImage, MEM_RESERVE, PAGE_READWRITE);
@@ -66,7 +72,7 @@ DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 	for (int section_counter = 0; section_counter < new_headers->FileHeader.NumberOfSections; section_counter++)
 	{
 
-		IMAGE_SECTION_HEADER* ish = (IMAGE_SECTION_HEADER *)((Number)&new_headers->OptionalHeader + new_headers->FileHeader.SizeOfOptionalHeader + section_counter * sizeof(IMAGE_SECTION_HEADER));
+		IMAGE_SECTION_HEADER* ish = (IMAGE_SECTION_HEADER *)((PtrInt)&new_headers->OptionalHeader + new_headers->FileHeader.SizeOfOptionalHeader + section_counter * sizeof(IMAGE_SECTION_HEADER));
 		
 		byte* section_destination = 0;
 		if (ish->SizeOfRawData != 0)
@@ -110,29 +116,30 @@ DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 	//
 	// Perform Relocations
 	//	 
-	DWORD delta = ((DWORD)module_destination - headers->OptionalHeader.ImageBase);
-	
-	if (delta != 0) 
-	{  
+	PtrInt delta = (PtrInt)(module_destination - new_headers->OptionalHeader.ImageBase);
+
+	if (delta != 0)
+	{
 		IMAGE_DATA_DIRECTORY* relocation_directory_entry = &new_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC];
 		IMAGE_BASE_RELOCATION* relocation_table = (IMAGE_BASE_RELOCATION*)(module_destination + relocation_directory_entry->VirtualAddress);
 
-		while (relocation_table->VirtualAddress > 0)
+		while (relocation_table->VirtualAddress)
 		{
-			for (int relocations = 0; relocations < ((relocation_table->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2); relocations++)
+			IMAGE_RELOC* relocation_block = (IMAGE_RELOC*)((PtrInt)relocation_table + sizeof(IMAGE_BASE_RELOCATION));
+			for (DWORD relocations = 0; relocations < ((relocation_table->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2); relocations++)
 			{
-				WORD reloc_info = *(WORD*)(relocation_table + sizeof(IMAGE_BASE_RELOCATION) + (relocations * sizeof(WORD)));
-				int type, offset;
+				IMAGE_RELOC reloc_info = relocation_block[relocations];
 
-				type = reloc_info >> 12;
-				offset = reloc_info & 0xfff;
-
-				if (type == IMAGE_REL_BASED_HIGHLOW)
+				if (reloc_info.type == IMAGE_REL_BASED_HIGHLOW)
 				{
-					*(DWORD*)(module_destination + relocation_table->VirtualAddress + offset) += delta;
+					*(DWORD*)(module_destination + relocation_table->VirtualAddress + reloc_info.offset) += delta;
 				}
+				else if (reloc_info.type == IMAGE_REL_BASED_DIR64)
+				{
+					*(UINT64*)(module_destination + relocation_table->VirtualAddress + reloc_info.offset) += delta;
+				}	  
 			}
-			relocation_table += relocation_table->SizeOfBlock;
+			relocation_table = (IMAGE_BASE_RELOCATION*)((PtrInt)relocation_table + relocation_table->SizeOfBlock);
 		}
 	}
 
@@ -144,7 +151,7 @@ DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 
 	for (int import_module_index = 0; import_module_index  < ((import_directory_entry->Size / sizeof(IMAGE_IMPORT_DESCRIPTOR) - 1)); import_module_index++)
 	{
-		HMODULE import_module = modinfo->fnLoadLibrary((char*)((Number)module_destination + import_table[import_module_index].Name));
+		HMODULE import_module = modinfo->fnLoadLibrary((char*)((PtrInt)module_destination + import_table[import_module_index].Name));
 			   
 		if (!import_module){
 			return 0;
@@ -153,21 +160,29 @@ DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 		// http://win32assembly.programminghorizon.com/pe-tut6.html
 		IMAGE_THUNK_DATA* originalThunkTable = (IMAGE_THUNK_DATA*)(module_destination + import_table[import_module_index].OriginalFirstThunk);
 		IMAGE_THUNK_DATA* thunkTable = (IMAGE_THUNK_DATA*)(module_destination + import_table[import_module_index].FirstThunk);
+
+		if (!originalThunkTable)
+		{
+			originalThunkTable = thunkTable;
+		}
 		
 		for (int import_function_index = 0; thunkTable[import_function_index].u1.Function != 0 /*the table is zero terminated*/; import_function_index++) 
 		{
-			if (originalThunkTable && IMAGE_SNAP_BY_ORDINAL(originalThunkTable[import_function_index].u1.Ordinal))
+			if (IMAGE_SNAP_BY_ORDINAL(originalThunkTable[import_function_index].u1.Ordinal))
 			{
 				//by ordinal
 				WORD ordinal = IMAGE_ORDINAL(originalThunkTable[import_function_index].u1.Ordinal);
-				thunkTable[import_function_index].u1.Function = (Number)modinfo->fnGetProcAddress(import_module, MAKEINTRESOURCE(ordinal));
+				thunkTable[import_function_index].u1.Function = (PtrInt)modinfo->fnGetProcAddress(import_module, MAKEINTRESOURCE(ordinal));
 			}
 			else
 			{
 				// by name
 				IMAGE_IMPORT_BY_NAME* thunkdata = (IMAGE_IMPORT_BY_NAME*)(module_destination + originalThunkTable[import_function_index].u1.AddressOfData);   				
-				thunkTable[import_function_index].u1.Function = (Number)modinfo->fnGetProcAddress(import_module, thunkdata->Name);
-		   		   
+				thunkTable[import_function_index].u1.Function = (PtrInt)modinfo->fnGetProcAddress(import_module, thunkdata->Name);		   		   
+			}
+			if (thunkTable[import_function_index].u1.Function == 0)
+			{
+				return 0;
 			}
 		}
 	}
@@ -178,7 +193,7 @@ DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 	//						
 	for (int section_counter = 0; section_counter < new_headers->FileHeader.NumberOfSections; section_counter++)
 	{
-		IMAGE_SECTION_HEADER* ish = (IMAGE_SECTION_HEADER *)((Number)&new_headers->OptionalHeader + new_headers->FileHeader.SizeOfOptionalHeader + section_counter * sizeof(IMAGE_SECTION_HEADER));
+		IMAGE_SECTION_HEADER* ish = (IMAGE_SECTION_HEADER *)((PtrInt)&new_headers->OptionalHeader + new_headers->FileHeader.SizeOfOptionalHeader + section_counter * sizeof(IMAGE_SECTION_HEADER));
 		DWORD memoryprotection = 0;
 
 		if (ish->Characteristics & IMAGE_SCN_MEM_DISCARDABLE)
@@ -253,12 +268,10 @@ DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 	//
 	// call Entrypoint
 	//
-	Number dllmainaddress = (Number)module_destination + new_headers->OptionalHeader.AddressOfEntryPoint;	
+	PtrInt dllmainaddress = (PtrInt)module_destination + new_headers->OptionalHeader.AddressOfEntryPoint;	
 	((DllMainFunction)dllmainaddress)((HINSTANCE)module_destination, DLL_PROCESS_ATTACH, NULL);
-
-	
-	modinfo->raw_module_destination = module_destination;
-	return 1337;
+																	
+	return delta;
 }	  	  	 
 					   
 void END_SHELLCODE(void) {}
@@ -295,8 +308,8 @@ void Test()
 
 	LoadLibShellcode(info);
 	LoadLibShellcode(info);
-	//LoadLibShellcode(info);
-	//LoadLibShellcode(info);
+	LoadLibShellcode(info);
+	LoadLibShellcode(info);
 }
 
 

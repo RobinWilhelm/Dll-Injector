@@ -132,12 +132,12 @@ namespace Dll_Injector.Methods
 
             loaderinfo.target.GetModuleInformation("kernel32.dll", out modinfo);
 
-            infos.raw_module_destination = (UInt64)loaderinfo.rawModuleAddress;
-            infos.fnLoadLibrary          = (UInt64)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "LoadLibraryA");
-            infos.fnVirtualAlloc         = (UInt64)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "VirtualAlloc");
-            infos.fnVirtualFree          = (UInt64)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "VirtualFree");
-            infos.fnGetProcAddress       = (UInt64)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "GetProcAddress");
-            infos.fnVirtualProtect       = (UInt64)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "VirtualProtect");
+            infos.raw_module_destination = (UInt64)loaderinfo.rawModuleAddress; 
+            infos.fnLoadLibrary          = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "LoadLibraryA", true);
+            infos.fnVirtualAlloc         = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualAlloc", true);
+            infos.fnVirtualFree          = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualFree", true);
+            infos.fnGetProcAddress       = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "GetProcAddress", true);
+            infos.fnVirtualProtect       = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualProtect", true);
 
             if (infos.fnLoadLibrary == 0 || infos.fnVirtualAlloc == 0 || infos.fnVirtualFree == 0 || infos.fnGetProcAddress == 0 || infos.fnVirtualProtect == 0)
             {
@@ -163,15 +163,15 @@ namespace Dll_Injector.Methods
             ShellcodeInformation32 infos = new ShellcodeInformation32();
             ModuleInformation modinfo = new ModuleInformation();
 
-
-            infos.raw_module_destination = (UInt32)loaderinfo.rawModuleAddress;
             loaderinfo.target.GetModuleInformation("kernel32.dll", out modinfo);
 
-            infos.fnLoadLibrary = (UInt32)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "LoadLibraryA");
-            infos.fnVirtualAlloc = (UInt32)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "VirtualAlloc");
-            infos.fnVirtualFree = (UInt32)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "VirtualFree");
-            infos.fnGetProcAddress = (UInt32)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "GetProcAddress");
-            infos.fnVirtualProtect = (UInt32)ProcessExtensions.GetFunctionAddress(loaderinfo.hProcess, modinfo.ImageBase, "VirtualProtect");
+            infos.raw_module_destination = (UInt32)loaderinfo.rawModuleAddress;
+            infos.fnLoadLibrary          = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "LoadLibraryA", true);
+            infos.fnVirtualAlloc         = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualAlloc", true);
+            infos.fnVirtualFree          = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualFree", true);
+            infos.fnGetProcAddress       = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "GetProcAddress", true);
+            infos.fnVirtualProtect       = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualProtect", true);
+            
 
             if (infos.fnLoadLibrary == 0 || infos.fnVirtualAlloc == 0 || infos.fnVirtualFree == 0 || infos.fnGetProcAddress == 0 || infos.fnVirtualProtect == 0)
             {
@@ -185,20 +185,21 @@ namespace Dll_Injector.Methods
 
         private bool ReflectiveInject_with_Shellcode(Process target, string dll_path)
         {
-            byte[] modulebytes = File.ReadAllBytes(dll_path);
             ReflectiveLoaderInfo loaderinfo = new ReflectiveLoaderInfo();
             loaderinfo.target = target;
+            byte[] rawmodule = File.ReadAllBytes(dll_path);
+            bool success = false;
 
             using (loaderinfo.hProcess = target.Open((uint)(ProcessAccessType.PROCESS_VM_OPERATION | ProcessAccessType.PROCESS_VM_WRITE | ProcessAccessType.PROCESS_VM_READ)))
             {
-                loaderinfo.rawModuleAddress = Kernel32.VirtualAllocEx(loaderinfo.hProcess, IntPtr.Zero, (uint)modulebytes.Length, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ReadWrite);
+                loaderinfo.rawModuleAddress = Kernel32.VirtualAllocEx(loaderinfo.hProcess, IntPtr.Zero, (uint)rawmodule.Length, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ReadWrite);
 
                 if (loaderinfo.rawModuleAddress == IntPtr.Zero)
                 {
                     return false;
                 }
 
-                ProcessExtensions.WriteMemory(loaderinfo.hProcess, modulebytes, loaderinfo.rawModuleAddress);
+                ProcessExtensions.WriteMemory(loaderinfo.hProcess, rawmodule, loaderinfo.rawModuleAddress);
 
                 ProcessArchitecture targetarch = target.GetArchitecture();
                 if (targetarch == ProcessArchitecture.x64)
@@ -218,20 +219,24 @@ namespace Dll_Injector.Methods
                 if (hthread == IntPtr.Zero)
                 {
                     return false;
-                }
+                }                              
 
                 // check for success
-                Kernel32.WaitForSingleObject(hthread, 0);  
+                Kernel32.WaitForSingleObject(hthread, 3000);  
                 uint exitcode = 0;
-                bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);       
-                
-                if(res && exitcode == 1337)
+                bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
+                                
+                if(res && exitcode != 0)
                 {
-                    return true;
+                    success = true;
                 }
-         
+
+                // remove traces
+                res = Kernel32.VirtualFreeEx(loaderinfo.hProcess, loaderinfo.rawModuleAddress, 0, AllocationType.Release);
+                res = Kernel32.VirtualFreeEx(loaderinfo.hProcess, loaderinfo.shellcodeInfoAddress, 0, AllocationType.Release);
+                res = Kernel32.VirtualFreeEx(loaderinfo.hProcess, loaderinfo.shellcodeAddress, 0, AllocationType.Release);
             }
-            return false;
+            return success;
         }
 
         private bool ReflectiveInject_with_LoadFunction(Process target, string dll_path)
