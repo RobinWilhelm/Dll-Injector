@@ -20,6 +20,13 @@ namespace Dll_Injector.Utils
         x64,        
     }
 
+    public enum ThreadCreationMethod
+    {
+        CreateRemoteThread = 0,
+        RtlCreateUserThread,
+    }
+
+
     public struct ModuleInformation
     {
         public IntPtr ImageBase;
@@ -28,38 +35,8 @@ namespace Dll_Injector.Utils
         public string Path;
     }
 
-    public static class ProcessExtensions
+    public static class RemoteProcessApi
     {
-        #region wrapped kernel functions  
-        public static SafeProcessHandle Open(this Process process, uint accessType)
-        {
-            SafeProcessHandle hProcess = Kernel32.OpenProcess(accessType, false, (uint)process.Id);
-            if(hProcess.IsInvalid)
-            {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "OpenProcess failed on Process " + process.Id);
-            }
-            else
-            {
-                return hProcess;
-            }
-        }
-
-        // opens a handle with PROCESS_QUERY_LIMITED_INFORMATION
-        public static ProcessArchitecture GetArchitecture(this Process process)
-        {
-            try
-            {
-                SafeProcessHandle hProcess = process.Open((uint)ProcessAccessType.PROCESS_QUERY_LIMITED_INFORMATION);
-                ProcessArchitecture arch = GetArchitecture(hProcess);
-                hProcess.Close();
-                return arch;
-            }
-            catch(Win32Exception e)
-            {
-                return ProcessArchitecture.Unknown;
-            }           
-        }
-
         // the handle will need PROCESS_QUERY_LIMITED_INFORMATION
         public static ProcessArchitecture GetArchitecture(SafeProcessHandle hProcess)
         {            
@@ -71,6 +48,50 @@ namespace Dll_Injector.Utils
             }
             return (x86Process) ? ProcessArchitecture.x86 : ProcessArchitecture.x64;                   
         }   
+
+        public static SafeThreadHandle CreateThread(SafeProcessHandle hProcess, IntPtr startAddress, IntPtr lpParameter, ThreadCreationMethod method = ThreadCreationMethod.CreateRemoteThread)
+        {
+            IntPtr hThread = IntPtr.Zero;
+            switch (method)
+            {
+                case ThreadCreationMethod.CreateRemoteThread:
+                    IntPtr tmp;
+                    hThread = Kernel32.CreateRemoteThread(hProcess, IntPtr.Zero, 0, startAddress, lpParameter, 0, out tmp);
+                    if (hThread == IntPtr.Zero)
+                    {
+                        throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateRemoteThread failed");
+                    }
+                    break;
+                case ThreadCreationMethod.RtlCreateUserThread:
+                    
+                    NtStatus rcut_result = Ntdll.RtlCreateUserThread(hProcess, IntPtr.Zero, false, 0, IntPtr.Zero, IntPtr.Zero, startAddress, lpParameter, ref hThread, IntPtr.Zero);
+                    if (rcut_result != NtStatus.Success || hThread == IntPtr.Zero)
+                    {
+                        throw new Exception("RtlCreateUserThread failed with NtStatus: " + rcut_result.ToString());
+                    }
+                    break;              
+            }
+            return new SafeThreadHandle(hThread, true);
+        }
+
+        public static IntPtr AllocateMemory(SafeProcessHandle hProcess, IntPtr address, uint size, MemoryProtection protection)
+        {
+            IntPtr result = Kernel32.VirtualAllocEx(hProcess, address, size, AllocationType.Reserve | AllocationType.Commit, protection);
+            if(result == IntPtr.Zero)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "VirtualAllocEx failed");
+            }
+            return result;
+        }
+
+        public static void FreeMemory(SafeProcessHandle hProcess, IntPtr address, uint size)
+        {
+            bool result = Kernel32.VirtualFreeEx(hProcess, address, size, AllocationType.Release);
+            if (!result)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "VirtualFreeEx failed");
+            }
+        }
 
         // the given handle needs PROCESS_VM_READ 
         public static T ReadMemory<T>(SafeProcessHandle hProcess, IntPtr address)
@@ -116,24 +137,7 @@ namespace Dll_Injector.Utils
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "WriteProcessMemory failed");
             }
-        }
-        #endregion wrapped kernel functions  
-
-        // opens a handle with PROCESS_QUERY_LIMITED_INFORMATION
-        public static IntegrityLevel GetIntegrityLevel(this Process process)
-        {
-            try
-            {
-                SafeProcessHandle hProcess = process.Open((uint)(ProcessAccessType.PROCESS_QUERY_LIMITED_INFORMATION));
-                IntegrityLevel il = GetIntegrityLevel(hProcess);
-                hProcess.Close();
-                return il;
-            }
-            catch (Win32Exception e)
-            {
-                return IntegrityLevel.Unknown;
-            }
-        }
+        }       
 
         // the handle will need PROCESS_QUERY_LIMITED_INFORMATION
         public static IntegrityLevel GetIntegrityLevel(SafeProcessHandle hProcess)
@@ -193,10 +197,9 @@ namespace Dll_Injector.Utils
             {
                 return IntegrityLevel.Unknown;
             }              
-        }        
+        }
 
-        // does not open a handle
-        public static bool GetModuleInformation(this Process target, string module_name, out ModuleInformation moduleInformation)
+        public static bool GetModuleInformation(int target_id, ProcessArchitecture target_arch ,string module_name, out ModuleInformation moduleInformation)
         {
             moduleInformation = new ModuleInformation();
 
@@ -205,29 +208,29 @@ namespace Dll_Injector.Utils
                 return false;
 
             NtStatus result;
-            if (target.Id == Injector.GetProcess().Id)
+            if (target_id == Injector.GetProcess().Id)
             {
-                result = Ntdll.RtlQueryProcessDebugInformation((int)target.Id, (uint)RtlQueryProcessDebugInformationFunctionFlags.PDI_MODULES, (IntPtr)p_rdi);
+                result = Ntdll.RtlQueryProcessDebugInformation(target_id, (uint)RtlQueryProcessDebugInformationFunctionFlags.PDI_MODULES, (IntPtr)p_rdi);
             }
             else
             {
                 if (Environment.Is64BitProcess)
                 {
                     ulong flags = 0;
-                    if (target.GetArchitecture() == ProcessArchitecture.x86)
+                    if (target_arch == ProcessArchitecture.x86)
                     {
                         flags = (ulong)(RtlQueryProcessDebugInformationFunctionFlags.PDI_WOW64_MODULES | RtlQueryProcessDebugInformationFunctionFlags.PDI_NONINVASIVE);
                     }
-                    else if (target.GetArchitecture() == ProcessArchitecture.x64)
+                    else if (target_arch == ProcessArchitecture.x64)
                     {
                         flags = (ulong)(RtlQueryProcessDebugInformationFunctionFlags.PDI_MODULES);
                     }
 
-                    result = Ntdll.RtlQueryProcessDebugInformation((int)target.Id, (uint)flags, (IntPtr)p_rdi);
+                    result = Ntdll.RtlQueryProcessDebugInformation(target_id, (uint)flags, (IntPtr)p_rdi);
                 }
                 else
                 {
-                    result = Ntdll.RtlQueryProcessDebugInformation((int)target.Id, (uint)(RtlQueryProcessDebugInformationFunctionFlags.PDI_MODULES), (IntPtr)p_rdi);
+                    result = Ntdll.RtlQueryProcessDebugInformation(target_id, (uint)(RtlQueryProcessDebugInformationFunctionFlags.PDI_MODULES), (IntPtr)p_rdi);
                 }
             }
 
@@ -254,7 +257,7 @@ namespace Dll_Injector.Utils
                     path = path.Substring(0, idx);
 
                 string name = path.Substring(dmi.ModuleNameOffset, path.Length - dmi.ModuleNameOffset);
-               
+
                 if (name.ToUpper() == module_name.ToUpper())
                 {
                     moduleInformation.ImageBase = dmi.ImageBase;
@@ -266,38 +269,8 @@ namespace Dll_Injector.Utils
                 }
             }
 
-            Ntdll.RtlDestroyQueryDebugBuffer((IntPtr)p_rdi);  
+            Ntdll.RtlDestroyQueryDebugBuffer((IntPtr)p_rdi);
             return found;
-        }
-
-        // does not open a handle
-        public static IntPtr GetModuleAddress(this Process target, string module_name)
-        {
-            ModuleInformation modInfo;
-            if (target.GetModuleInformation(module_name, out modInfo))
-            {
-                return modInfo.ImageBase;
-            }
-            else
-            {
-                return IntPtr.Zero;
-            }
-        }
-        
-        // will open a handle with PROCESS_VM_READ and PROCESS_QUERY_LIMITED_INFORMATION access rights        
-        public static IntPtr GetFunctionAddress(this Process process, IntPtr hmodule, string func_name)
-        {
-            try
-            {
-                SafeProcessHandle hProcess = process.Open((uint)(ProcessAccessType.PROCESS_VM_READ | ProcessAccessType.PROCESS_QUERY_LIMITED_INFORMATION));
-                IntPtr address = GetFunctionAddress(hProcess, hmodule, func_name);
-                hProcess.Close();
-                return address;
-            }
-            catch (Win32Exception e)
-            {
-                return IntPtr.Zero;
-            }
         }
 
         // will need PROCESS_VM_READ and PROCESS_QUERY_LIMITED_INFORMATION access rights
@@ -325,7 +298,7 @@ namespace Dll_Injector.Utils
                 IntPtr p_ioh = hmodule + idh.e_lfanew + Marshal.SizeOf(typeof(Winnt.IMAGE_FILE_HEADER)); // address of IMAGE_OPTIONAL_HEADER
                 IntPtr p_et = IntPtr.Zero;
 
-                switch (ProcessExtensions.GetArchitecture(hProcess))
+                switch (GetArchitecture(hProcess))
                 {
                     case ProcessArchitecture.x86:
                         Winnt.IMAGE_OPTIONAL_HEADER32 ioh32 = ReadMemory<Winnt.IMAGE_OPTIONAL_HEADER32>(hProcess, p_ioh);
@@ -388,6 +361,6 @@ namespace Dll_Injector.Utils
             {
                 return IntPtr.Zero;
             } 
-        }    
+        }
     }
 }

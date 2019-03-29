@@ -130,7 +130,9 @@
     <Compile Include="Utils\ArrayExtentions.cs" />
     <Compile Include="Utils\PEFileHelper.cs" />
     <Compile Include="Utils\PEHeader.cs" />
+    <Compile Include="Utils\ProcessExtensions.cs" />
     <Compile Include="Utils\RemoteProcess.cs" />
+    <Compile Include="Utils\SafeThreadHandle.cs" />
     <Compile Include="Utils\TypeSize.cs" />
     <Compile Include="Utils\BinaryConverter.cs" />
     <Compile Include="Native\Winnt.cs" />

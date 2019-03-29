@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
+using Dll_Injector.Utils;
 
 namespace Dll_Injector.Native
 {
@@ -74,10 +75,10 @@ namespace Dll_Injector.Native
         public static extern bool WriteProcessMemory(SafeProcessHandle hProcess, IntPtr lpBaseAddress, [In, Out] byte[] buffer, UInt32 size, int lpNumberOfBytesWritten);
 
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
-        public static extern IntPtr VirtualAllocEx(SafeProcessHandle hProcess, IntPtr lpAddress, uint dwSize, AllocationType flAllocationType, MemoryProtection flProtect);
+        public static extern IntPtr VirtualAllocEx(SafeProcessHandle hProcess, IntPtr lpAddress, UInt64 dwSize, AllocationType flAllocationType, MemoryProtection flProtect);
 
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
-        public static extern bool VirtualFreeEx(SafeProcessHandle hProcess, IntPtr lpAddress, int dwSize, AllocationType dwFreeType);
+        public static extern bool VirtualFreeEx(SafeProcessHandle hProcess, IntPtr lpAddress, UInt64 dwSize, AllocationType dwFreeType);
 
         [DllImport("kernel32.dll")]
         public static extern IntPtr CreateRemoteThread(SafeProcessHandle hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, out IntPtr lpThreadId);
@@ -93,10 +94,10 @@ namespace Dll_Injector.Native
         public static extern bool IsWow64Process([In] SafeProcessHandle processHandle, [Out, MarshalAs(UnmanagedType.Bool)] out bool wow64Process);
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern UInt32 WaitForSingleObject(IntPtr hHandle, UInt32 dwMilliseconds);
+        public static extern UInt32 WaitForSingleObject(SafeHandle hHandle, UInt32 dwMilliseconds);
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool GetExitCodeThread(IntPtr hHandle, ref uint lpExitCode);
+        public static extern bool GetExitCodeThread(SafeThreadHandle hHandle, ref uint lpExitCode);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool AttachConsole(uint dwProcessId);

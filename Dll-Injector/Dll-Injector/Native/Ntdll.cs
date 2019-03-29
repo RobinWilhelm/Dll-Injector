@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using Dll_Injector.Utils;
+using Microsoft.Win32.SafeHandles;
 
 namespace Dll_Injector.Native
 {
@@ -94,7 +95,14 @@ enum RtlQueryProcessDebugInformationFunctionFlags : uint
         public static int StructureSize = Marshal.SizeOf<RTL_DEBUG_INFORMATION>();
     }
 
-class Ntdll
+    [StructLayout(LayoutKind.Sequential)]
+    struct CLIENT_ID
+    {
+        IntPtr UniqueProcess;
+        IntPtr UniqueThread;
+    };
+
+    class Ntdll
     {
         [DllImport("ntdll.dll")]
         public static extern IntPtr RtlCreateQueryDebugBuffer(uint Size, bool EventPair);
@@ -104,5 +112,11 @@ class Ntdll
 
         [DllImport("ntdll.dll")]
         public static extern NtStatus RtlQueryProcessDebugInformation(int ProcessId, uint DebugInfoClassMask, IntPtr DebugBuffer);
+      
+        [DllImport("ntdll.dll")]
+        public static extern NtStatus RtlCreateUserThread(SafeProcessHandle ProcessHandle, IntPtr SecurityDescriptor,  bool CreateSuspended, uint StackZeroBits, IntPtr StackReserved, IntPtr StackCommit, IntPtr StartAddress, IntPtr StartParameter, ref IntPtr ThreadHandle, IntPtr ClientID);
+        //public static extern NtStatus RtlCreateUserThread(SafeProcessHandle ProcessHandle, IntPtr SecurityDescriptor, bool CreateSuspended, uint StackZeroBits, IntPtr StackReserved, IntPtr StackCommit, IntPtr StartAddress, IntPtr StartParameter, ref SafeThreadHandle ThreadHandle, IntPtr ClientID);
+        //[DllImport("ntdll.dll")]
+        //public static extern int RtlCreateUserThread(IntPtr Process, IntPtr ThreadSecurityDescriptor, Boolean CreateSuspended, IntPtr ZeroBits, IntPtr MaximumStackSize, IntPtr CommittedStackSize, IntPtr StartAddress, IntPtr Parameter, ref SafeThreadHandle Thread, IntPtr ClientId);
     }
 }

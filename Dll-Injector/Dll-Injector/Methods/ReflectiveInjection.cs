@@ -61,7 +61,7 @@ namespace Dll_Injector.Methods
             tbLoadFnName = new TextBox();
             rbUseExportedFunction = new RadioButton();
             rbUseShellcode = new RadioButton();
-
+                       
             // 
             // tbLoadFnName
             // 
@@ -116,71 +116,74 @@ namespace Dll_Injector.Methods
             return false;
         }
 
-        private bool PrepareInjectionx64(ref ReflectiveLoaderInfo loaderinfo)
+        private void PrepareInjectionx64(ref ReflectiveLoaderInfo loaderinfo)
         {           
-            loaderinfo.shellcodeAddress = Kernel32.VirtualAllocEx(loaderinfo.hProcess, IntPtr.Zero, (uint)Shellcode.Shellcode.reflectiveloader_shellcode_x64.Length, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ExecuteReadWrite);
-            loaderinfo.shellcodeInfoAddress = Kernel32.VirtualAllocEx(loaderinfo.hProcess, IntPtr.Zero, (uint)ShellcodeInformation64.StructureSize, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ReadWrite);
-
-            if (loaderinfo.shellcodeAddress == IntPtr.Zero || loaderinfo.shellcodeInfoAddress == IntPtr.Zero)
-            {
-                return false;
-            }
-
-            ProcessExtensions.WriteMemory(loaderinfo.hProcess, Shellcode.Shellcode.reflectiveloader_shellcode_x64, loaderinfo.shellcodeAddress);
+            loaderinfo.shellcodeAddress = RemoteProcessApi.AllocateMemory(loaderinfo.hProcess, IntPtr.Zero, (uint)Shellcode.Shellcode.reflectiveloader_shellcode_x64.Length, MemoryProtection.ExecuteReadWrite);
+            loaderinfo.shellcodeInfoAddress = RemoteProcessApi.AllocateMemory(loaderinfo.hProcess, IntPtr.Zero, (uint)ShellcodeInformation64.StructureSize, MemoryProtection.ReadWrite);
+              
+            RemoteProcessApi.WriteMemory(loaderinfo.hProcess, Shellcode.Shellcode.reflectiveloader_shellcode_x64, loaderinfo.shellcodeAddress);
             ShellcodeInformation64 infos = new ShellcodeInformation64();
             ModuleInformation modinfo = new ModuleInformation();
 
-            loaderinfo.target.GetModuleInformation("kernel32.dll", out modinfo);
+            if(!loaderinfo.target.GetModuleInformation("kernel32.dll", out modinfo))
+            {
+                throw new Exception("Could not find kernel32.dll in target");
+            }
 
             infos.raw_module_destination = (UInt64)loaderinfo.rawModuleAddress; 
-            infos.fnLoadLibrary          = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "LoadLibraryA", true);
-            infos.fnVirtualAlloc         = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualAlloc", true);
-            infos.fnVirtualFree          = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualFree", true);
-            infos.fnGetProcAddress       = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "GetProcAddress", true);
-            infos.fnVirtualProtect       = (UInt64)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualProtect", true);
+            infos.fnLoadLibrary          = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "LoadLibraryA", true);
+            infos.fnVirtualAlloc         = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualAlloc", true);
+            infos.fnVirtualFree          = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualFree", true);
+            infos.fnGetProcAddress       = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "GetProcAddress", true);
+            infos.fnVirtualProtect       = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualProtect", true);
 
             if (infos.fnLoadLibrary == 0 || infos.fnVirtualAlloc == 0 || infos.fnVirtualFree == 0 || infos.fnGetProcAddress == 0 || infos.fnVirtualProtect == 0)
             {
-                return false;
+                throw new Exception("Could not find a required function");
             }
 
-            ProcessExtensions.WriteMemory<ShellcodeInformation64>(loaderinfo.hProcess, ref infos, loaderinfo.shellcodeInfoAddress);                
-          
-            return true;
+            infos.fnLoadLibrary         += (UInt64)modinfo.ImageBase;
+            infos.fnVirtualAlloc        += (UInt64)modinfo.ImageBase;
+            infos.fnVirtualFree         += (UInt64)modinfo.ImageBase;
+            infos.fnGetProcAddress      += (UInt64)modinfo.ImageBase;
+            infos.fnVirtualProtect      += (UInt64)modinfo.ImageBase;
+
+            RemoteProcessApi.WriteMemory<ShellcodeInformation64>(loaderinfo.hProcess, ref infos, loaderinfo.shellcodeInfoAddress); 
         }
 
-        private bool PrepareInjectionx86(ref ReflectiveLoaderInfo loaderinfo)
-        {
-            loaderinfo.shellcodeAddress = Kernel32.VirtualAllocEx(loaderinfo.hProcess, IntPtr.Zero, (uint)Shellcode.Shellcode.reflectiveloader_shellcode_x86.Length, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ExecuteReadWrite);
-            loaderinfo.shellcodeInfoAddress = Kernel32.VirtualAllocEx(loaderinfo.hProcess, IntPtr.Zero, (uint)ShellcodeInformation32.StructureSize, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ReadWrite);
+        private void PrepareInjectionx86(ref ReflectiveLoaderInfo loaderinfo)
+        {            
+            loaderinfo.shellcodeAddress     = RemoteProcessApi.AllocateMemory(loaderinfo.hProcess, IntPtr.Zero, (uint)Shellcode.Shellcode.reflectiveloader_shellcode_x86.Length, MemoryProtection.ExecuteReadWrite);
+            loaderinfo.shellcodeInfoAddress = RemoteProcessApi.AllocateMemory(loaderinfo.hProcess, IntPtr.Zero, (uint)ShellcodeInformation32.StructureSize, MemoryProtection.ReadWrite);
+              
+            RemoteProcessApi.WriteMemory(loaderinfo.hProcess, Shellcode.Shellcode.reflectiveloader_shellcode_x86, loaderinfo.shellcodeAddress);
+            ShellcodeInformation32 infos    = new ShellcodeInformation32();
+            ModuleInformation modinfo       = new ModuleInformation();
 
-            if (loaderinfo.shellcodeAddress == IntPtr.Zero || loaderinfo.shellcodeInfoAddress == IntPtr.Zero)
+            if (!loaderinfo.target.GetModuleInformation("kernel32.dll", out modinfo))
             {
-                return false;
+                throw new Exception("Could not find kernel32.dll in target");
             }
-
-            ProcessExtensions.WriteMemory(loaderinfo.hProcess, Shellcode.Shellcode.reflectiveloader_shellcode_x86, loaderinfo.shellcodeAddress);
-            ShellcodeInformation32 infos = new ShellcodeInformation32();
-            ModuleInformation modinfo = new ModuleInformation();
-
-            loaderinfo.target.GetModuleInformation("kernel32.dll", out modinfo);
 
             infos.raw_module_destination = (UInt32)loaderinfo.rawModuleAddress;
-            infos.fnLoadLibrary          = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "LoadLibraryA", true);
-            infos.fnVirtualAlloc         = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualAlloc", true);
-            infos.fnVirtualFree          = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualFree", true);
-            infos.fnGetProcAddress       = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "GetProcAddress", true);
-            infos.fnVirtualProtect       = (UInt32)modinfo.ImageBase + PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualProtect", true);
+            infos.fnLoadLibrary          = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "LoadLibraryA", true);
+            infos.fnVirtualAlloc         = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualAlloc", true);
+            infos.fnVirtualFree          = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualFree", true);
+            infos.fnGetProcAddress       = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "GetProcAddress", true);
+            infos.fnVirtualProtect       = PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "VirtualProtect", true);
             
-
             if (infos.fnLoadLibrary == 0 || infos.fnVirtualAlloc == 0 || infos.fnVirtualFree == 0 || infos.fnGetProcAddress == 0 || infos.fnVirtualProtect == 0)
             {
-                return false;
+                throw new Exception("Could not find a required function");
             }
 
-            ProcessExtensions.WriteMemory<ShellcodeInformation32>(loaderinfo.hProcess, ref infos, loaderinfo.shellcodeInfoAddress);
+            infos.fnLoadLibrary      += (UInt32)modinfo.ImageBase;
+            infos.fnVirtualAlloc     += (UInt32)modinfo.ImageBase;
+            infos.fnVirtualFree      += (UInt32)modinfo.ImageBase;
+            infos.fnGetProcAddress   += (UInt32)modinfo.ImageBase;
+            infos.fnVirtualProtect   += (UInt32)modinfo.ImageBase;
 
-            return true;
+            RemoteProcessApi.WriteMemory<ShellcodeInformation32>(loaderinfo.hProcess, ref infos, loaderinfo.shellcodeInfoAddress);
         }
 
         private bool ReflectiveInject_with_Shellcode(Process target, string dll_path)
@@ -190,51 +193,49 @@ namespace Dll_Injector.Methods
             byte[] rawmodule = File.ReadAllBytes(dll_path);
             bool success = false;
 
-            using (loaderinfo.hProcess = target.Open((uint)(ProcessAccessType.PROCESS_VM_OPERATION | ProcessAccessType.PROCESS_VM_WRITE | ProcessAccessType.PROCESS_VM_READ)))
+            try
             {
-                loaderinfo.rawModuleAddress = Kernel32.VirtualAllocEx(loaderinfo.hProcess, IntPtr.Zero, (uint)rawmodule.Length, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ReadWrite);
-
-                if (loaderinfo.rawModuleAddress == IntPtr.Zero)
+                using (loaderinfo.hProcess = target.Open((uint)(ProcessAccessType.PROCESS_VM_OPERATION | ProcessAccessType.PROCESS_VM_WRITE | ProcessAccessType.PROCESS_VM_READ | ProcessAccessType.PROCESS_CREATE_THREAD)))
                 {
-                    return false;
+                    loaderinfo.rawModuleAddress = RemoteProcessApi.AllocateMemory(loaderinfo.hProcess, IntPtr.Zero, (uint)rawmodule.Length, MemoryProtection.ReadWrite);
+
+                    RemoteProcessApi.WriteMemory(loaderinfo.hProcess, rawmodule, loaderinfo.rawModuleAddress);
+
+                    switch (target.GetArchitecture())
+                    {
+                        case ProcessArchitecture.Unknown:
+                            return false;
+                            break;
+                        case ProcessArchitecture.x86:
+                            PrepareInjectionx86(ref loaderinfo);
+                            break;
+                        case ProcessArchitecture.x64:
+                            PrepareInjectionx64(ref loaderinfo);
+                            break;
+                    }            
+
+                    SafeThreadHandle hthread = RemoteProcessApi.CreateThread(loaderinfo.hProcess, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress, ThreadCreationMethod.RtlCreateUserThread);
+
+                    // check for success
+                    Kernel32.WaitForSingleObject(hthread, 3000);
+                    uint exitcode = 0;
+                    bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
+
+                    if (res && exitcode != 0)
+                    {
+                        success = true;
+                    }
+
+                    // remove traces
+                    RemoteProcessApi.FreeMemory(loaderinfo.hProcess, loaderinfo.rawModuleAddress, 0);
+                    RemoteProcessApi.FreeMemory(loaderinfo.hProcess, loaderinfo.shellcodeInfoAddress, 0);
+                    RemoteProcessApi.FreeMemory(loaderinfo.hProcess, loaderinfo.shellcodeAddress, 0);
                 }
-
-                ProcessExtensions.WriteMemory(loaderinfo.hProcess, rawmodule, loaderinfo.rawModuleAddress);
-
-                ProcessArchitecture targetarch = target.GetArchitecture();
-                if (targetarch == ProcessArchitecture.x64)
-                {
-                    if (!PrepareInjectionx64(ref loaderinfo))
-                        return false;
-                }
-                else if (targetarch == ProcessArchitecture.x86)
-                {
-                    if (!PrepareInjectionx86(ref loaderinfo))
-                        return false;
-                }
-
-                IntPtr tmp;
-                IntPtr hthread = Kernel32.CreateRemoteThread(loaderinfo.hProcess, IntPtr.Zero, 0, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress, 0, out tmp);
-
-                if (hthread == IntPtr.Zero)
-                {
-                    return false;
-                }                              
-
-                // check for success
-                Kernel32.WaitForSingleObject(hthread, 3000);  
-                uint exitcode = 0;
-                bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
-                                
-                if(res && exitcode != 0)
-                {
-                    success = true;
-                }
-
-                // remove traces
-                res = Kernel32.VirtualFreeEx(loaderinfo.hProcess, loaderinfo.rawModuleAddress, 0, AllocationType.Release);
-                res = Kernel32.VirtualFreeEx(loaderinfo.hProcess, loaderinfo.shellcodeInfoAddress, 0, AllocationType.Release);
-                res = Kernel32.VirtualFreeEx(loaderinfo.hProcess, loaderinfo.shellcodeAddress, 0, AllocationType.Release);
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show(e.Message, "Exception occured in ReflectiveInject_with_Shellcode");
+                return success;
             }
             return success;
         }
@@ -247,14 +248,14 @@ namespace Dll_Injector.Methods
             int loaderFnOffset = (int)PEFileHelper.GetFunctionOffsetFromBytes(modulebytes, tbLoadFnName.Text);
             if (loaderFnOffset == 0)
             {
-                MessageBox.Show("Could not find Load Function", "Aborting Injection");
+                MessageBox.Show("Could not locate the Loader Function", "Aborting Injection");
                 return false;
             }
 
             SafeProcessHandle hProcess = target.Open((uint)(ProcessAccessType.PROCESS_VM_OPERATION | ProcessAccessType.PROCESS_VM_WRITE));
 
             IntPtr hmodule = Kernel32.VirtualAllocEx(hProcess, IntPtr.Zero, (uint)modulebytes.Length, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ExecuteReadWrite);
-            ProcessExtensions.WriteMemory(hProcess, modulebytes, hmodule);
+            RemoteProcessApi.WriteMemory(hProcess, modulebytes, hmodule);
 
             IntPtr loadFnAddress = hmodule + loaderFnOffset;
 

@@ -156,7 +156,7 @@
             // rbReflective
             // 
             this.rbReflective.AutoSize = true;
-            this.rbReflective.Location = new System.Drawing.Point(629, 94);
+            this.rbReflective.Location = new System.Drawing.Point(539, 94);
             this.rbReflective.Name = "rbReflective";
             this.rbReflective.Size = new System.Drawing.Size(73, 17);
             this.rbReflective.TabIndex = 16;

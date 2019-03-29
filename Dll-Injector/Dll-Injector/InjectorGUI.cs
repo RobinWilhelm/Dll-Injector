@@ -97,38 +97,40 @@ namespace Dll_Injector
             Process[] processes = Process.GetProcesses();
             foreach (Process process in processes)
             {
-                SafeProcessHandle hProcess = Kernel32.OpenProcess((uint)ProcessAccessType.PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)process.Id);
-                if (hProcess.IsInvalid)
-                    continue;
-
-                ProcessArchitecture arch = ProcessExtensions.GetArchitecture(hProcess);
-
-        
-                // no x86 -> x64 injection, it is complicated and unnecessesary
-                if (arch == ProcessArchitecture.x64) { 
-                    if (GetProcessArchitecture() == ProcessArchitecture.x86)
+                using (SafeProcessHandle hProcess = Kernel32.OpenProcess((uint)ProcessAccessType.PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)process.Id))
+                {
+                    if (hProcess.IsInvalid)
                         continue;
+
+                    ProcessArchitecture arch = RemoteProcessApi.GetArchitecture(hProcess);
+                    
+                    // no x86 -> x64 injection, it is too complicated and unnecessesary
+                    if (arch == ProcessArchitecture.x64)
+                    {
+                        if (GetProcessArchitecture() == ProcessArchitecture.x86)
+                            continue;
+                    }
+
+                    // check if process has any windows
+                    if (cbOnlyWindowed.Checked)
+                    {
+                        if (process.MainWindowHandle == IntPtr.Zero)
+                            continue;
+                    }
+
+                    // too many of those
+                    if (process.ProcessName == "svchost")
+                        continue;
+
+                    // skip the injector process
+                    if (process.Id == Kernel32.GetCurrentProcessId())
+                        continue;
+
+                    processList.Add(process);
+
+                    ListViewItem lvm = new ListViewItem(new[] { process.Id.ToString(), process.ProcessName, arch.ToString(), RemoteProcessApi.GetIntegrityLevel(hProcess).ToString() });
+                    lvProcessList.Items.Add(lvm);           
                 }
-
-                // check if process has any windows
-                if(cbOnlyWindowed.Checked){
-                    if(process.MainWindowHandle == (IntPtr)0)
-                        continue;                    
-                }
-                                
-                // too many of those
-                if (process.ProcessName == "svchost")
-                    continue;
-
-                // skip the injector process
-                if (process.Id == Kernel32.GetCurrentProcessId())
-                    continue;
-
-                processList.Add(process);
-
-                ListViewItem lvm = new ListViewItem(new[] { process.Id.ToString(), process.ProcessName, arch.ToString(), ProcessExtensions.GetIntegrityLevel(hProcess).ToString()});
-                lvProcessList.Items.Add(lvm);
-                hProcess.Close();
             }
         }        
         

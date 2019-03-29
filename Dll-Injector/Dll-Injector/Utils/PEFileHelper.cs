@@ -8,11 +8,16 @@ using System.Threading.Tasks;
 
 namespace Dll_Injector.Utils
 {
-    // functions that work on the dll before it is loaded via loadlibary (e.g. still on the disk)
+    // functions that work on dll file before it is loaded via loadlibary(e.g. still on the disk)
     class PEFileHelper
     {
-        // does not open a handle
-        // retrieves the offset of a function in a DLL
+        /// <summary>
+        ///  Gets the offset of a function in a module
+        /// </summary>
+        /// <param name="modulepath">path to module</param>
+        /// <param name="func_name"></param>
+        /// <param name="get_as_rva"> If true, the rva instead of the offset is returned. Use this if you need the function after loading the module.</param>
+        /// <returns>byte offset / rva of function relative to modulebase</returns>
         public static uint GetFunctionOffsetFromDisk(string modulepath, string func_name, bool get_as_rva = false)
         {
             using (FileStream fs = new FileStream(modulepath, FileMode.Open, FileAccess.Read))
@@ -21,6 +26,13 @@ namespace Dll_Injector.Utils
             }
         }
 
+        /// <summary>
+        ///  Gets the offset of a function in a module
+        /// </summary>
+        /// <param name="modulebytes">byte array representation of the unloaded module</param>
+        /// <param name="func_name"></param>
+        /// <param name="get_as_rva"> If true, the rva instead of the offset is returned. Use this if you need the function after loading the module.</param>
+        /// <returns>byte offset / rva of function relative to modulebase</returns>
         public static uint GetFunctionOffsetFromBytes(byte[] modulebytes, string func_name, bool get_as_rva = false)
         {
             using (var memstream = new MemoryStream(modulebytes))
@@ -29,6 +41,13 @@ namespace Dll_Injector.Utils
             }
         }
 
+        /// <summary>
+        ///  Gets the offset of a function in a module
+        /// </summary>
+        /// <param name="modulestream">byte stream representation of the unloaded module</param>
+        /// <param name="func_name"></param>
+        /// <param name="get_as_rva"> If true, the rva instead of the offset is returned. Use this if you need the function after loading the module.</param>
+        /// <returns>byte offset / rva of function relative to modulebase</returns>
         public static uint GetFunctionOffsetFromModuleStream(Stream modulestream, string func_name, bool get_as_rva = false)
         {
             // load in the pe header
@@ -109,7 +128,11 @@ namespace Dll_Injector.Utils
             return 0;
         }
 
-        // does not open a handle
+        /// <summary>
+        ///  Returns the Architecture of the module at the specified location
+        /// </summary>
+        /// <param name="path">path of module</param>
+        /// <returns></returns>
         public static ProcessArchitecture GetArchitecture(string path)
         {
             using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read))

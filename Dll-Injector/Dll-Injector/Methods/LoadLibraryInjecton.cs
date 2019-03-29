@@ -17,23 +17,9 @@ namespace Dll_Injector.Methods
     class LoadLibraryInjection : InjectonMethod
     {
         private RadioButton rbCreateRemoteThread;
-        
-        public LoadLibraryInjection() : base()
-        {
-            
-        }
-        
-        public override bool Execute(Process target, string dll_path)
-        {
-            if (rbCreateRemoteThread.Checked)
-            {
-                return CreateRemoteThread_LoadLibrary(target, dll_path);
-            }              
-            
-            return false;
-        }
+        private RadioButton rbRtlCreateUserThread;
 
-        public override void PopulateUI(Control control)
+        public LoadLibraryInjection() : base()
         {
             rbCreateRemoteThread = new RadioButton();
             rbCreateRemoteThread.AutoSize = true;
@@ -46,56 +32,84 @@ namespace Dll_Injector.Methods
             rbCreateRemoteThread.UseVisualStyleBackColor = true;
             // this method is used by default
             rbCreateRemoteThread.Checked = true;
-            control.Controls.Add(rbCreateRemoteThread);    
-        }
 
-        private bool CreateRemoteThread_LoadLibrary(Process target, string dll)
+            rbRtlCreateUserThread = new RadioButton();
+            rbRtlCreateUserThread.AutoSize = true;
+            rbRtlCreateUserThread.Location = new System.Drawing.Point(7, 40);
+            rbRtlCreateUserThread.Name = "rbRtlCreateUserThread";
+            rbRtlCreateUserThread.Size = new System.Drawing.Size(127, 17);
+            rbRtlCreateUserThread.TabIndex = 0;
+            rbRtlCreateUserThread.TabStop = true;
+            rbRtlCreateUserThread.Text = "RtlCreateUserThread";
+            rbRtlCreateUserThread.UseVisualStyleBackColor = true;
+            // this method is used by default
+            rbRtlCreateUserThread.Checked = false;
+        }
+        
+        public override bool Execute(Process target, string dll_path)
         {
             try
             {
                 // 1 Verbindung zu Zielprozess herstellen (Handle)
                 uint access = (uint)(ProcessAccessType.PROCESS_CREATE_THREAD | ProcessAccessType.PROCESS_VM_WRITE | ProcessAccessType.PROCESS_VM_OPERATION);
-                SafeProcessHandle hProcess = target.Open(access);
-
-                // 2 Speicheradresse der Funktion LoadLibrary bestimmen 
-                IntPtr LoadLibraryFn = target.GetFunctionAddress(target.GetModuleAddress("kernel32.dll"), "LoadLibraryA");
-                if (LoadLibraryFn == IntPtr.Zero)
+                using (SafeProcessHandle hProcess = target.Open(access))
                 {
-                    hProcess.Close();
-                    return false;
+                    // 2 Speicheradresse der Funktion LoadLibrary bestimmen 
+                    ModuleInformation modinfo = new ModuleInformation();
+                    target.GetModuleInformation("kernel32.dll", out modinfo);
+
+                    IntPtr LoadLibraryFn = modinfo.ImageBase + (int)PEFileHelper.GetFunctionOffsetFromDisk(modinfo.Path, "LoadLibraryA", true);
+                    if (LoadLibraryFn == IntPtr.Zero)
+                    {
+                        throw new Exception("Could not find Function: LoadLibraryA");
+                    }
+
+                    // 3 Speicher im Zielprozess reservieren
+                    IntPtr address = RemoteProcessApi.AllocateMemory(hProcess, (IntPtr)null, Convert.ToUInt32(dll_path.Length), MemoryProtection.ReadWrite);
+
+                    // 4 DLL Pfad in den reservierten Speicher schreiben
+                    byte[] buffer = Encoding.ASCII.GetBytes(dll_path);
+                    RemoteProcessApi.WriteMemory(hProcess, buffer, address);
+                    
+                    // 5 Thread im Zielprozess erstellen und dort LoadLibrary mit der Adresse als Parameter ausführen
+                    ThreadCreationMethod threadcreationmethod = 0;
+                    if(rbCreateRemoteThread.Checked)
+                    {
+                        threadcreationmethod = ThreadCreationMethod.CreateRemoteThread;
+                    }
+                    else if(rbRtlCreateUserThread.Checked)
+                    {
+                        threadcreationmethod = ThreadCreationMethod.RtlCreateUserThread;
+                    }
+
+                    using (SafeThreadHandle hthread = RemoteProcessApi.CreateThread(hProcess, LoadLibraryFn, address, threadcreationmethod))
+                    {
+                        // check for success
+                        Kernel32.WaitForSingleObject(hthread, 3000);
+                        uint exitcode = 0;
+                        bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
+
+                        if (res && exitcode != 0)
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
                 }
-
-                // 3 Speicher im Zielprozess reservieren
-                IntPtr address = Kernel32.VirtualAllocEx(hProcess, (IntPtr)null, Convert.ToUInt32(dll.Length), AllocationType.Reserve | AllocationType.Commit, MemoryProtection.ReadWrite);
-                if (address == IntPtr.Zero)
-                {
-                    hProcess.Close();
-                    throw new Win32Exception(Marshal.GetLastWin32Error());   
-                }
-
-                // 4 DLL Pfad in den reservierten Speicher schreiben
-                byte[] buffer = Encoding.ASCII.GetBytes(dll);
-                ProcessExtensions.WriteMemory(hProcess, ref buffer, address);                
-
-                // 5 Thread im Zielprozess erstellen und dort LoadLibrary mit der Adresse als Parameter ausführen
-                IntPtr tmp;
-                IntPtr thread = Kernel32.CreateRemoteThread(hProcess, (IntPtr)null, 0, LoadLibraryFn, address, 0, out tmp);
-                if (thread == IntPtr.Zero)
-                {
-                    hProcess.Close();
-                    return false;
-                }
-
-                // 6 Verbindungen schließen
-                Kernel32.CloseHandle(thread);
-                hProcess.Close();
-                return true;
             }
-            catch(Win32Exception e)
+            catch (Win32Exception e)
             {
                 return false;
-            }        
+            }
         }
-       
+
+        public override void PopulateUI(Control control)
+        {            
+            control.Controls.Add(rbCreateRemoteThread);
+            control.Controls.Add(rbRtlCreateUserThread);
+        }           
     }
 }
