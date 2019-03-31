@@ -1,15 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Dll_Injector.Native;
+using Microsoft.Win32.SafeHandles;
+using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.IO;
-using System.ComponentModel;
-using System.Collections;
-using Microsoft.Win32.SafeHandles;
-using Dll_Injector.Native;
+using System.Text;
+using System.Threading;
 
 namespace Dll_Injector.Utils
 {
@@ -74,9 +70,156 @@ namespace Dll_Injector.Utils
             return new SafeThreadHandle(hThread, true);
         }
 
+        public static bool HijackThread(Process target, IntPtr startAddress, IntPtr paramAddress)
+        {
+            using (SafeProcessHandle hProcess = target.Open((uint)(ProcessAccessType.PROCESS_SUSPEND_RESUME | ProcessAccessType.PROCESS_VM_WRITE | ProcessAccessType.PROCESS_VM_READ | ProcessAccessType.PROCESS_VM_OPERATION)))
+            {
+                NtStatus status = NtStatus.Success;
+
+                status = Ntdll.NtSuspendProcess(hProcess);
+                if (status != NtStatus.Success)
+                {
+                    throw new Exception("NtSuspendProcess failed with NtStatus: " + status.ToString());
+                }
+
+                IntPtr ht = IntPtr.Zero;
+                ProcessThread capturedThread = null;
+
+                foreach (ProcessThread thread in target.Threads)
+                {
+                    // We are just using the first Thread we find
+                    ht = Kernel32.OpenThread((uint)(ThreadAccessType.THREAD_GET_CONTEXT | ThreadAccessType.THREAD_SET_CONTEXT | ThreadAccessType.THREAD_SUSPEND_RESUME), false, (uint)thread.Id);
+
+                    // if that did not work try another thread
+                    if (ht == IntPtr.Zero)
+                        continue;
+
+                    capturedThread = thread;
+                    break;
+                }
+
+                if(ht == IntPtr.Zero)
+                {
+                    throw new Exception("Could not find a thread to capture");
+                }
+
+                SafeThreadHandle hThread = new SafeThreadHandle(ht, false);
+
+                CONTEXT context = new CONTEXT();
+                context.ContextFlags = (uint)CONTEXT_FLAGS.CONTEXT_FULL;
+
+                if (!Kernel32.GetThreadContext(hThread.DangerousGetHandle(), ref context))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "GetThreadContext failed");
+                }
+
+                byte[] shellcode = new byte[]
+                {
+                    0x68, 0, 0, 0, 0,	 // return address					Offset 1
+		            0x9C,				 // pushfd
+		            0x60,				 // pushad
+
+		            0x68, 0, 0, 0, 0,	 // push param						Offset 8
+		            0xB8, 0, 0, 0, 0,	 // mov eax, &Loadlib				Offset +13
+		            0xFF, 0xD0,			 // call eax
+		            0xA3, 0, 0, 0, 0,	 // mov &loadlibreturn, eax			Offset +20 	
+		
+		            0xB8, 0, 0, 0, 0,	 // mov eax, &GetCurrentThread		Offset +25
+		            0xFF, 0xD0,			 // call eax	  
+		            0x50, 			     // push eax (thread handle)
+
+		            0xB8, 0, 0, 0, 0,	 // mov eax, &Suspendthread			Offset +33
+		            0xFF, 0xD0,			 // call eax
+		            0xA3, 0, 0, 0, 0,	 // mov &Suspendthread return, eax	Offset +40
+		
+		            0x61,				 // popad
+		            0x9D,				 // popfd
+		            0xc3,			     // ret	  		
+            	};
+    
+
+                IntPtr loadlibReturn = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, 4, MemoryProtection.ReadWrite);
+                IntPtr suspendThreadReturn = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, 4, MemoryProtection.ReadWrite);
+
+                IntPtr hmodule_kernel32 = Kernel32.GetModuleHandle("kernel32.dll");
+                IntPtr suspendthreadfn = Kernel32.GetProcAddress(hmodule_kernel32, "SuspendThread");
+                IntPtr getCurrentThreadfn = Kernel32.GetProcAddress(hmodule_kernel32, "GetCurrentThread");
+
+                if (suspendthreadfn == IntPtr.Zero || getCurrentThreadfn == IntPtr.Zero)
+                {
+                    throw new Exception("Did not find function: SuspendThread");
+                }
+
+                ((int)context.Eip).CopyToByteArray(shellcode, 1);
+                ((int)paramAddress).CopyToByteArray(shellcode, 8);
+                ((int)startAddress).CopyToByteArray(shellcode, 13);
+                ((int)loadlibReturn).CopyToByteArray(shellcode, 20);
+
+                ((int)getCurrentThreadfn).CopyToByteArray(shellcode, 25);
+                ((int)suspendthreadfn).CopyToByteArray(shellcode, 33);
+                ((int)suspendThreadReturn).CopyToByteArray(shellcode, 40);
+
+                IntPtr shellcodeAddress = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, (uint)shellcode.Length, MemoryProtection.ExecuteReadWrite);
+                RemoteProcessApi.WriteMemory(hProcess, shellcode, shellcodeAddress);
+                
+                context.Eip = (UInt32)shellcodeAddress;
+
+                if (!Kernel32.SetThreadContext(hThread.DangerousGetHandle(), ref context))
+                {
+                    return false;
+                }
+
+                Kernel32.ResumeThread(hThread.DangerousGetHandle());
+                if (status != NtStatus.Success)
+                {
+                    throw new Exception("NtResumeThread failed with NtStatus: " + status.ToString());
+                }
+
+           
+
+
+
+                // wait until the thread has finished executing our function
+                do
+                {
+                    Thread.Sleep(1);
+                    Process p = Process.GetProcessById(target.Id);
+                    foreach (ProcessThread thread in p.Threads)
+                    {
+                        if (thread.Id == capturedThread.Id)
+                        {
+                            capturedThread = thread;
+                            break;
+                        }
+                    }
+
+                    if (capturedThread.ThreadState == System.Diagnostics.ThreadState.Wait && capturedThread.WaitReason == ThreadWaitReason.Suspended)
+                        break;
+
+                } while (true);
+
+                
+                status = Ntdll.NtResumeProcess(hProcess);
+                if (status != NtStatus.Success)
+                {
+                    throw new Exception("NtResumeProcess failed with NtStatus: " + status.ToString());
+                }
+
+                uint hmodule = RemoteProcessApi.ReadMemory<uint>(hProcess, loadlibReturn);
+                if (hmodule != 0)
+                {
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+        }
+
         public static IntPtr AllocateMemory(SafeProcessHandle hProcess, IntPtr address, uint size, MemoryProtection protection)
         {
-            IntPtr result = Kernel32.VirtualAllocEx(hProcess, address, size, AllocationType.Reserve | AllocationType.Commit, protection);
+            IntPtr result = Kernel32.VirtualAllocEx(hProcess, address, size, (AllocationType.Reserve | AllocationType.Commit),protection);
             if(result == IntPtr.Zero)
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "VirtualAllocEx failed");
@@ -86,7 +229,7 @@ namespace Dll_Injector.Utils
 
         public static void FreeMemory(SafeProcessHandle hProcess, IntPtr address, uint size)
         {
-            bool result = Kernel32.VirtualFreeEx(hProcess, address, size, AllocationType.Release);
+            bool result = Kernel32.VirtualFreeEx(hProcess, address, size, (AllocationType.Release));
             if (!result)
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "VirtualFreeEx failed");

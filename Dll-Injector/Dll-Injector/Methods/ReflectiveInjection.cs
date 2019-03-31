@@ -54,18 +54,53 @@ namespace Dll_Injector.Methods
         private TextBox tbLoadFnName;
         private RadioButton rbUseExportedFunction;
         private RadioButton rbUseShellcode;
-        
-              
+
+        private Panel threadpanel;
+        private RadioButton rbCreateThread;
+        private RadioButton rbHijackThread;
+
+
         public ReflectiveInjection() : base()
         {
             tbLoadFnName = new TextBox();
             rbUseExportedFunction = new RadioButton();
             rbUseShellcode = new RadioButton();
-                       
+
+            threadpanel = new Panel();
+            threadpanel.Location = new System.Drawing.Point(0, 10);
+            threadpanel.Name = "threadpanel";
+            threadpanel.Size = new System.Drawing.Size(336, 100);
+            threadpanel.TabIndex = 0;
+
+            rbCreateThread = new RadioButton();
+            rbCreateThread.AutoSize = true;
+            rbCreateThread.Location = new System.Drawing.Point(7, 20);
+            rbCreateThread.Name = "rbCreateRemoteThread";
+            rbCreateThread.Size = new System.Drawing.Size(127, 17);
+            rbCreateThread.TabIndex = 0;
+            rbCreateThread.TabStop = true;
+            rbCreateThread.Text = "Create Thread";
+            rbCreateThread.UseVisualStyleBackColor = true;
+            // this method is used by default
+            rbCreateThread.Checked = true;
+
+            rbHijackThread = new RadioButton();
+            rbHijackThread.AutoSize = true;
+            rbHijackThread.Location = new System.Drawing.Point(7, 40);
+            rbHijackThread.Name = "rbHijackThread";
+            rbHijackThread.Size = new System.Drawing.Size(127, 17);
+            rbHijackThread.TabIndex = 0;
+            rbHijackThread.TabStop = true;
+            rbHijackThread.Text = "Capture Thread";
+            rbHijackThread.UseVisualStyleBackColor = true;
+
+            threadpanel.Controls.Add(rbCreateThread);
+            threadpanel.Controls.Add(rbHijackThread);
+
             // 
             // tbLoadFnName
             // 
-            tbLoadFnName.Location = new System.Drawing.Point(6, 43);
+            tbLoadFnName.Location = new System.Drawing.Point(7, 105);
             tbLoadFnName.Name = "tbLoadFnName";
             tbLoadFnName.Size = new System.Drawing.Size(324, 20);
             tbLoadFnName.TabIndex = 2;
@@ -74,7 +109,7 @@ namespace Dll_Injector.Methods
             // rbUseExportedFunction
             // 
             rbUseExportedFunction.AutoSize = true;
-            rbUseExportedFunction.Location = new System.Drawing.Point(6, 19);
+            rbUseExportedFunction.Location = new System.Drawing.Point(7,80);
             rbUseExportedFunction.Name = "rbUseExportedFunction";
             rbUseExportedFunction.Size = new System.Drawing.Size(160, 17);
             rbUseExportedFunction.TabIndex = 0;
@@ -85,7 +120,7 @@ namespace Dll_Injector.Methods
             // 
             rbUseShellcode.AutoSize = true;
             rbUseShellcode.Checked = true;
-            rbUseShellcode.Location = new System.Drawing.Point(6, 69);
+            rbUseShellcode.Location = new System.Drawing.Point(7, 130);
             rbUseShellcode.Name = "rbUseShellcode";
             rbUseShellcode.Size = new System.Drawing.Size(94, 17);
             rbUseShellcode.TabIndex = 3;
@@ -214,17 +249,24 @@ namespace Dll_Injector.Methods
                             break;
                     }            
 
-                    SafeThreadHandle hthread = RemoteProcessApi.CreateThread(loaderinfo.hProcess, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress, ThreadCreationMethod.RtlCreateUserThread);
-
-                    // check for success
-                    Kernel32.WaitForSingleObject(hthread, 3000);
-                    uint exitcode = 0;
-                    bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
-
-                    if (res && exitcode != 0)
+                    if(rbCreateThread.Checked)
                     {
-                        success = true;
+                        SafeThreadHandle hthread = RemoteProcessApi.CreateThread(loaderinfo.hProcess, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress, ThreadCreationMethod.RtlCreateUserThread);
+
+                        // check for success
+                        Kernel32.WaitForSingleObject(hthread, 3000);
+                        uint exitcode = 0;
+                        bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
+                        if (res && exitcode != 0)
+                        {
+                            success = true;
+                        }
                     }
+                    else if(rbHijackThread.Checked)
+                    {
+                        return RemoteProcessApi.HijackThread(target, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress);
+                    }    
+                               
 
                     // remove traces
                     RemoteProcessApi.FreeMemory(loaderinfo.hProcess, loaderinfo.rawModuleAddress, 0);
@@ -254,7 +296,7 @@ namespace Dll_Injector.Methods
 
             SafeProcessHandle hProcess = target.Open((uint)(ProcessAccessType.PROCESS_VM_OPERATION | ProcessAccessType.PROCESS_VM_WRITE));
 
-            IntPtr hmodule = Kernel32.VirtualAllocEx(hProcess, IntPtr.Zero, (uint)modulebytes.Length, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ExecuteReadWrite);
+            IntPtr hmodule = Kernel32.VirtualAllocEx(hProcess, IntPtr.Zero, (uint)modulebytes.Length,(AllocationType.Commit | AllocationType.Reserve), MemoryProtection.ExecuteReadWrite);
             RemoteProcessApi.WriteMemory(hProcess, modulebytes, hmodule);
 
             IntPtr loadFnAddress = hmodule + loaderFnOffset;
@@ -273,6 +315,7 @@ namespace Dll_Injector.Methods
             control.Controls.Add(tbLoadFnName);
             control.Controls.Add(rbUseExportedFunction);
             control.Controls.Add(rbUseShellcode);
+            control.Controls.Add(threadpanel);
         }
     }
 }

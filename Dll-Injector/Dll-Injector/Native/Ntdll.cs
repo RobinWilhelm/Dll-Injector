@@ -115,8 +115,17 @@ enum RtlQueryProcessDebugInformationFunctionFlags : uint
       
         [DllImport("ntdll.dll")]
         public static extern NtStatus RtlCreateUserThread(SafeProcessHandle ProcessHandle, IntPtr SecurityDescriptor,  bool CreateSuspended, uint StackZeroBits, IntPtr StackReserved, IntPtr StackCommit, IntPtr StartAddress, IntPtr StartParameter, ref IntPtr ThreadHandle, IntPtr ClientID);
-        //public static extern NtStatus RtlCreateUserThread(SafeProcessHandle ProcessHandle, IntPtr SecurityDescriptor, bool CreateSuspended, uint StackZeroBits, IntPtr StackReserved, IntPtr StackCommit, IntPtr StartAddress, IntPtr StartParameter, ref SafeThreadHandle ThreadHandle, IntPtr ClientID);
-        //[DllImport("ntdll.dll")]
-        //public static extern int RtlCreateUserThread(IntPtr Process, IntPtr ThreadSecurityDescriptor, Boolean CreateSuspended, IntPtr ZeroBits, IntPtr MaximumStackSize, IntPtr CommittedStackSize, IntPtr StartAddress, IntPtr Parameter, ref SafeThreadHandle Thread, IntPtr ClientId);
+
+        [DllImport("ntdll.dll")]
+        public static extern NtStatus NtSuspendProcess(SafeProcessHandle hProcess);
+
+        [DllImport("ntdll.dll")]
+        public static extern NtStatus NtResumeProcess(SafeProcessHandle hProcess);
+
+        [DllImport("ntdll.dll")]
+        public static extern NtStatus NtSuspendThread(SafeThreadHandle hThread, IntPtr PreviousSuspendCount);
+
+        [DllImport("ntdll.dll")]
+        public static extern NtStatus NtResumeThread(SafeThreadHandle hThread, IntPtr SuspendCount);
     }
 }

@@ -16,34 +16,34 @@ namespace Dll_Injector.Methods
 
     class LoadLibraryInjection : InjectonMethod
     {
-        private RadioButton rbCreateRemoteThread;
-        private RadioButton rbRtlCreateUserThread;
+        private RadioButton rbCreateThread;
+        private RadioButton rbHijackThread;
+        private CheckBox cbUnlinkFromPeb;
 
         public LoadLibraryInjection() : base()
         {
-            rbCreateRemoteThread = new RadioButton();
-            rbCreateRemoteThread.AutoSize = true;
-            rbCreateRemoteThread.Location = new System.Drawing.Point(7, 20);
-            rbCreateRemoteThread.Name = "rbCreateRemoteThread";
-            rbCreateRemoteThread.Size = new System.Drawing.Size(127, 17);
-            rbCreateRemoteThread.TabIndex = 0;
-            rbCreateRemoteThread.TabStop = true;
-            rbCreateRemoteThread.Text = "CreateRemoteThread";
-            rbCreateRemoteThread.UseVisualStyleBackColor = true;
+            rbCreateThread = new RadioButton();
+            rbCreateThread.AutoSize = true;
+            rbCreateThread.Location = new System.Drawing.Point(7, 20);
+            rbCreateThread.Name = "rbCreateRemoteThread";
+            rbCreateThread.Size = new System.Drawing.Size(127, 17);
+            rbCreateThread.TabIndex = 0;
+            rbCreateThread.TabStop = true;
+            rbCreateThread.Text = "Create Thread";
+            rbCreateThread.UseVisualStyleBackColor = true;
             // this method is used by default
-            rbCreateRemoteThread.Checked = true;
+            rbCreateThread.Checked = true;
 
-            rbRtlCreateUserThread = new RadioButton();
-            rbRtlCreateUserThread.AutoSize = true;
-            rbRtlCreateUserThread.Location = new System.Drawing.Point(7, 40);
-            rbRtlCreateUserThread.Name = "rbRtlCreateUserThread";
-            rbRtlCreateUserThread.Size = new System.Drawing.Size(127, 17);
-            rbRtlCreateUserThread.TabIndex = 0;
-            rbRtlCreateUserThread.TabStop = true;
-            rbRtlCreateUserThread.Text = "RtlCreateUserThread";
-            rbRtlCreateUserThread.UseVisualStyleBackColor = true;
-            // this method is used by default
-            rbRtlCreateUserThread.Checked = false;
+
+            rbHijackThread = new RadioButton();
+            rbHijackThread.AutoSize = true;
+            rbHijackThread.Location = new System.Drawing.Point(7, 40);
+            rbHijackThread.Name = "rbHijackThread";
+            rbHijackThread.Size = new System.Drawing.Size(127, 17);
+            rbHijackThread.TabIndex = 0;
+            rbHijackThread.TabStop = true;
+            rbHijackThread.Text = "Capture Thread";
+            rbHijackThread.UseVisualStyleBackColor = true;
         }
         
         public override bool Execute(Process target, string dll_path)
@@ -71,45 +71,47 @@ namespace Dll_Injector.Methods
                     byte[] buffer = Encoding.ASCII.GetBytes(dll_path);
                     RemoteProcessApi.WriteMemory(hProcess, buffer, address);
                     
-                    // 5 Thread im Zielprozess erstellen und dort LoadLibrary mit der Adresse als Parameter ausführen
-                    ThreadCreationMethod threadcreationmethod = 0;
-                    if(rbCreateRemoteThread.Checked)
+                    // 5 Thread im Zielprozess erstellen und dort LoadLibrary mit der Adresse als Parameter ausführen                  
+                    if(rbCreateThread.Checked)
                     {
-                        threadcreationmethod = ThreadCreationMethod.CreateRemoteThread;
-                    }
-                    else if(rbRtlCreateUserThread.Checked)
-                    {
-                        threadcreationmethod = ThreadCreationMethod.RtlCreateUserThread;
-                    }
-
-                    using (SafeThreadHandle hthread = RemoteProcessApi.CreateThread(hProcess, LoadLibraryFn, address, threadcreationmethod))
-                    {
-                        // check for success
-                        Kernel32.WaitForSingleObject(hthread, 3000);
-                        uint exitcode = 0;
-                        bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
-
-                        if (res && exitcode != 0)
+                        using (SafeThreadHandle hthread = RemoteProcessApi.CreateThread(hProcess, LoadLibraryFn, address, ThreadCreationMethod.RtlCreateUserThread))
                         {
-                            return true;
+                            // check for success
+                            Kernel32.WaitForSingleObject(hthread, 3000);
+                            uint exitcode = 0;
+                            bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
+
+                            if (res && exitcode != 0)
+                            {
+                                return true;
+                            }
+                            else
+                            {
+                                return false;
+                            }
                         }
-                        else
-                        {
-                            return false;
-                        }
+                    }
+                    else if(rbHijackThread.Checked)
+                    {
+                        return RemoteProcessApi.HijackThread(target, LoadLibraryFn, address);
+                    }
+                    else
+                    {
+                        return false;
                     }
                 }
             }
-            catch (Win32Exception e)
+            catch (Exception e)
             {
+                MessageBox.Show(e.Message, "Loadlibrary Injection failed");
                 return false;
             }
         }
 
         public override void PopulateUI(Control control)
         {            
-            control.Controls.Add(rbCreateRemoteThread);
-            control.Controls.Add(rbRtlCreateUserThread);
+            control.Controls.Add(rbCreateThread);
+            control.Controls.Add(rbHijackThread);
         }           
     }
 }
