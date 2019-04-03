@@ -93,7 +93,7 @@ namespace Dll_Injector.Methods
                     }
                     else if(rbHijackThread.Checked)
                     {
-                        return RemoteProcessApi.HijackThread(target, LoadLibraryFn, address);
+                        return RemoteProcessApi.HijackThread(target, LoadLibraryFn, address) != 0;
                     }
                     else
                     {

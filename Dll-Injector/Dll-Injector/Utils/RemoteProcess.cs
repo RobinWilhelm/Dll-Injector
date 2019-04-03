@@ -70,17 +70,81 @@ namespace Dll_Injector.Utils
             return new SafeThreadHandle(hThread, true);
         }
 
-        public static bool HijackThread(Process target, IntPtr startAddress, IntPtr paramAddress)
+        public static void SuspendProcess(SafeProcessHandle hProcess)
         {
+            NtStatus status = Ntdll.NtSuspendProcess(hProcess);
+            if (status != NtStatus.Success)
+            {
+                throw new Exception("NtSuspendProcess failed with NtStatus: " + status.ToString());
+            }
+        }
+
+        public static void ResumeProcess(SafeProcessHandle hProcess)
+        {
+            NtStatus status = Ntdll.NtResumeProcess(hProcess);
+            if (status != NtStatus.Success)
+            {
+                throw new Exception("NtResumeProcess failed with NtStatus: " + status.ToString());
+            }
+        }
+
+        public static void SuspendThread(SafeThreadHandle hProcess)
+        {
+            NtStatus status = Ntdll.NtSuspendThread(hProcess, IntPtr.Zero);
+            if (status != NtStatus.Success)
+            {
+                throw new Exception("NtSuspendThread failed with NtStatus: " + status.ToString());
+            }
+        }
+
+        public static void ResumeThread(SafeThreadHandle hProcess)
+        {
+            NtStatus status = Ntdll.NtResumeThread(hProcess, IntPtr.Zero);
+            if (status != NtStatus.Success)
+            {
+                throw new Exception("NtResumeThread failed with NtStatus: " + status.ToString());
+            }
+        }
+
+        public static ThreadWaitReason GetThreadWaitReason(int procId, int threadId)
+        {
+            Process proc = Process.GetProcessById(procId);
+            if(proc != null)
+            {
+                foreach(ProcessThread thread in proc.Threads)
+                {
+                    if(thread.Id == threadId)
+                    {
+                        if (thread.ThreadState == System.Diagnostics.ThreadState.Wait)
+                            return thread.WaitReason;
+                    }
+                }
+            }
+            return ThreadWaitReason.Unknown;
+        }
+
+        /// <summary>
+        /// Will use a thread in the target process to execute an arbitrary function that fulfills the following requirements:
+        /// must be __stdcall,
+        /// return value is maximal 4 bytes long,
+        /// exactly one 4 byte argument
+        /// 
+        /// this function will return once the called function has returnedöö
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="target">target process</param>
+        /// <param name="startAddress">address of function</param>
+        /// <param name="param">parameter</param>
+        /// <returns></returns>
+        public static uint HijackThread(Process target, IntPtr startAddress, IntPtr param)
+        {
+            // not supported yet
+            if (target.GetArchitecture() != ProcessArchitecture.x86)
+                return 0;
+
             using (SafeProcessHandle hProcess = target.Open((uint)(ProcessAccessType.PROCESS_SUSPEND_RESUME | ProcessAccessType.PROCESS_VM_WRITE | ProcessAccessType.PROCESS_VM_READ | ProcessAccessType.PROCESS_VM_OPERATION)))
             {
-                NtStatus status = NtStatus.Success;
-
-                status = Ntdll.NtSuspendProcess(hProcess);
-                if (status != NtStatus.Success)
-                {
-                    throw new Exception("NtSuspendProcess failed with NtStatus: " + status.ToString());
-                }
+                SuspendProcess(hProcess);
 
                 IntPtr ht = IntPtr.Zero;
                 ProcessThread capturedThread = null;
@@ -112,32 +176,7 @@ namespace Dll_Injector.Utils
                 {
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "GetThreadContext failed");
                 }
-
-                byte[] shellcode = new byte[]
-                {
-                    0x68, 0, 0, 0, 0,	 // return address					Offset 1
-		            0x9C,				 // pushfd
-		            0x60,				 // pushad
-
-		            0x68, 0, 0, 0, 0,	 // push param						Offset 8
-		            0xB8, 0, 0, 0, 0,	 // mov eax, &Loadlib				Offset +13
-		            0xFF, 0xD0,			 // call eax
-		            0xA3, 0, 0, 0, 0,	 // mov &loadlibreturn, eax			Offset +20 	
-		
-		            0xB8, 0, 0, 0, 0,	 // mov eax, &GetCurrentThread		Offset +25
-		            0xFF, 0xD0,			 // call eax	  
-		            0x50, 			     // push eax (thread handle)
-
-		            0xB8, 0, 0, 0, 0,	 // mov eax, &Suspendthread			Offset +33
-		            0xFF, 0xD0,			 // call eax
-		            0xA3, 0, 0, 0, 0,	 // mov &Suspendthread return, eax	Offset +40
-		
-		            0x61,				 // popad
-		            0x9D,				 // popfd
-		            0xc3,			     // ret	  		
-            	};
-    
-
+                                
                 IntPtr loadlibReturn = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, 4, MemoryProtection.ReadWrite);
                 IntPtr suspendThreadReturn = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, 4, MemoryProtection.ReadWrite);
 
@@ -150,14 +189,7 @@ namespace Dll_Injector.Utils
                     throw new Exception("Did not find function: SuspendThread");
                 }
 
-                ((int)context.Eip).CopyToByteArray(shellcode, 1);
-                ((int)paramAddress).CopyToByteArray(shellcode, 8);
-                ((int)startAddress).CopyToByteArray(shellcode, 13);
-                ((int)loadlibReturn).CopyToByteArray(shellcode, 20);
-
-                ((int)getCurrentThreadfn).CopyToByteArray(shellcode, 25);
-                ((int)suspendthreadfn).CopyToByteArray(shellcode, 33);
-                ((int)suspendThreadReturn).CopyToByteArray(shellcode, 40);
+                byte[] shellcode = Shellcode.Shellcode.PrepareShellcodeForThreadHijackingx86((uint)startAddress, (uint)param, (uint)loadlibReturn, context.Eip, (uint)getCurrentThreadfn, (uint)suspendthreadfn, (uint)suspendThreadReturn);
 
                 IntPtr shellcodeAddress = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, (uint)shellcode.Length, MemoryProtection.ExecuteReadWrite);
                 RemoteProcessApi.WriteMemory(hProcess, shellcode, shellcodeAddress);
@@ -166,54 +198,25 @@ namespace Dll_Injector.Utils
 
                 if (!Kernel32.SetThreadContext(hThread.DangerousGetHandle(), ref context))
                 {
-                    return false;
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "SetThreadContext failed");
                 }
 
-                Kernel32.ResumeThread(hThread.DangerousGetHandle());
-                if (status != NtStatus.Success)
-                {
-                    throw new Exception("NtResumeThread failed with NtStatus: " + status.ToString());
-                }
-
-           
-
-
+                ResumeThread(hThread);
 
                 // wait until the thread has finished executing our function
                 do
                 {
-                    Thread.Sleep(1);
-                    Process p = Process.GetProcessById(target.Id);
-                    foreach (ProcessThread thread in p.Threads)
+                    Thread.Sleep(100);
+                    if(GetThreadWaitReason(target.Id, capturedThread.Id) == ThreadWaitReason.Suspended)
                     {
-                        if (thread.Id == capturedThread.Id)
-                        {
-                            capturedThread = thread;
-                            break;
-                        }
-                    }
-
-                    if (capturedThread.ThreadState == System.Diagnostics.ThreadState.Wait && capturedThread.WaitReason == ThreadWaitReason.Suspended)
                         break;
+                    }
 
                 } while (true);
 
-                
-                status = Ntdll.NtResumeProcess(hProcess);
-                if (status != NtStatus.Success)
-                {
-                    throw new Exception("NtResumeProcess failed with NtStatus: " + status.ToString());
-                }
+                ResumeProcess(hProcess);
 
-                uint hmodule = RemoteProcessApi.ReadMemory<uint>(hProcess, loadlibReturn);
-                if (hmodule != 0)
-                {
-                    return true;
-                }
-                else
-                {
-                    return false;
-                }
+                return RemoteProcessApi.ReadMemory<uint>(hProcess, loadlibReturn);               
             }
         }
 

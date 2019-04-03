@@ -128,7 +128,6 @@
     <Compile Include="Native\Psapi.cs" />
     <Compile Include="Shellcode\Shellcode.cs" />
     <Compile Include="Utils\ArrayExtentions.cs" />
-    <Compile Include="Utils\Int32Extensions.cs" />
     <Compile Include="Utils\PEFileHelper.cs" />
     <Compile Include="Utils\PEHeader.cs" />
     <Compile Include="Utils\ProcessExtensions.cs" />

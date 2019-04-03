@@ -264,9 +264,9 @@ namespace Dll_Injector.Methods
                     }
                     else if(rbHijackThread.Checked)
                     {
-                        return RemoteProcessApi.HijackThread(target, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress);
-                    }    
-                               
+                        if(RemoteProcessApi.HijackThread(target, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress) != 0)
+                            success = true;
+                    }                                   
 
                     // remove traces
                     RemoteProcessApi.FreeMemory(loaderinfo.hProcess, loaderinfo.rawModuleAddress, 0);
