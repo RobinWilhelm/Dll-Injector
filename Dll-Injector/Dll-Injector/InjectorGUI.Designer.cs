@@ -191,7 +191,9 @@
             this.Controls.Add(this.lbInjectionreturn);
             this.Controls.Add(this.rbReflective);
             this.Controls.Add(this.rbLoadLibrary);
+#if DEBUG
             this.Controls.Add(this.button1);
+#endif
             this.Controls.Add(this.tbDllArchitecture);
             this.Controls.Add(this.lvProcessList);
             this.Controls.Add(this.cbOnlyWindowed);

@@ -10,6 +10,7 @@ using Dll_Injector.Native;
 using System.ComponentModel;
 using Dll_Injector.Utils;
 using System.Windows.Forms;
+using Dll_Injector.Execution;
 
 namespace Dll_Injector.Methods
 {
@@ -19,6 +20,7 @@ namespace Dll_Injector.Methods
         private RadioButton rbCreateThread;
         private RadioButton rbHijackThread;
         private CheckBox cbUnlinkFromPeb;
+        private CodeExecutionMethod executionMethod;
 
         public LoadLibraryInjection() : base()
         {
@@ -31,9 +33,7 @@ namespace Dll_Injector.Methods
             rbCreateThread.TabStop = true;
             rbCreateThread.Text = "Create Thread";
             rbCreateThread.UseVisualStyleBackColor = true;
-            // this method is used by default
-            rbCreateThread.Checked = true;
-
+            rbCreateThread.Click += rbCreateThread_Click;
 
             rbHijackThread = new RadioButton();
             rbHijackThread.AutoSize = true;
@@ -44,12 +44,36 @@ namespace Dll_Injector.Methods
             rbHijackThread.TabStop = true;
             rbHijackThread.Text = "Capture Thread";
             rbHijackThread.UseVisualStyleBackColor = true;
+            rbHijackThread.Click += rbHijackThread_Click;
+
+            SetDefaultSettings();
         }
-        
-        public override bool Execute(Process target, string dll_path)
+
+        public void SetDefaultSettings()
         {
+            rbCreateThread.Checked = true;
+            executionMethod = new RtlCreateUserThreadMethod();
+        }
+
+        private void rbCreateThread_Click(object sender, EventArgs e)
+        {
+            executionMethod = new RtlCreateUserThreadMethod();
+        }
+
+        private void rbHijackThread_Click(object sender, EventArgs e)
+        {
+            executionMethod = new HijackThreadMethod();
+        }
+
+        public override bool Execute(Process target, string dll_path)
+        {          
             try
             {
+                if (executionMethod == null)
+                {
+                    throw new Exception("executionMethod was null");
+                }
+
                 // 1 Verbindung zu Zielprozess herstellen (Handle)
                 uint access = (uint)(ProcessAccessType.PROCESS_CREATE_THREAD | ProcessAccessType.PROCESS_VM_WRITE | ProcessAccessType.PROCESS_VM_OPERATION);
                 using (SafeProcessHandle hProcess = target.Open(access))
@@ -70,34 +94,18 @@ namespace Dll_Injector.Methods
                     // 4 DLL Pfad in den reservierten Speicher schreiben
                     byte[] buffer = Encoding.ASCII.GetBytes(dll_path);
                     RemoteProcessApi.WriteMemory(hProcess, buffer, address);
-                    
-                    // 5 Thread im Zielprozess erstellen und dort LoadLibrary mit der Adresse als Parameter ausführen                  
-                    if(rbCreateThread.Checked)
-                    {
-                        using (SafeThreadHandle hthread = RemoteProcessApi.CreateThread(hProcess, LoadLibraryFn, address, ThreadCreationMethod.RtlCreateUserThread))
-                        {
-                            // check for success
-                            Kernel32.WaitForSingleObject(hthread, 3000);
-                            uint exitcode = 0;
-                            bool res = Kernel32.GetExitCodeThread(hthread, ref exitcode);
 
-                            if (res && exitcode != 0)
-                            {
+                    // 5 Thread im Zielprozess erstellen und dort LoadLibrary mit der Adresse als Parameter ausführen  
+                    executionMethod.Target = target;
+                    using (SafeThreadHandle hThread = executionMethod.ExecuteNonBlocking(LoadLibraryFn, address))
+                    {
+                        if (!hThread.IsInvalid)
+                        {
+                            // imagebase of loaded module
+                            uint hmod = executionMethod.WaitForReturn(hThread, 3000);
+                            if (hmod != 0)
                                 return true;
-                            }
-                            else
-                            {
-                                return false;
-                            }
                         }
-                    }
-                    else if(rbHijackThread.Checked)
-                    {
-                        return RemoteProcessApi.HijackThread(target, LoadLibraryFn, address) != 0;
-                    }
-                    else
-                    {
-                        return false;
                     }
                 }
             }
@@ -106,6 +114,8 @@ namespace Dll_Injector.Methods
                 MessageBox.Show(e.Message, "Loadlibrary Injection failed");
                 return false;
             }
+
+            return false;
         }
 
         public override void PopulateUI(Control control)

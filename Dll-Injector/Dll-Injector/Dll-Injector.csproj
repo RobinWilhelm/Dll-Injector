@@ -110,8 +110,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Methods\InjectionMethod.cs" />
-    <Compile Include="Methods\ReflectiveInjection.cs" />
+    <Compile Include="Execution\CodeExecutionMethod.cs" />
+    <Compile Include="Execution\CreateThreadMethod.cs" />
+    <Compile Include="Execution\HijackThreadMethod.cs" />
+    <Compile Include="Execution\RtlCreateUserThreadExecution.cs" />
+    <Compile Include="Injectionmethods\InjectionMethod.cs" />
+    <Compile Include="Injectionmethods\ManualMapInjection.cs" />
+    <Compile Include="Injectionmethods\ReflectiveInjection.cs" />
     <Compile Include="Native\Advapi32.cs" />
     <Compile Include="InjectorGUI.cs">
       <SubType>Form</SubType>
@@ -119,7 +124,7 @@
     <Compile Include="InjectorGUI.Designer.cs">
       <DependentUpon>InjectorGUI.cs</DependentUpon>
     </Compile>
-    <Compile Include="Methods\LoadLibraryInjecton.cs" />
+    <Compile Include="Injectionmethods\LoadLibraryInjecton.cs" />
     <Compile Include="Native\Handle.cs" />
     <Compile Include="Native\Kernel32.cs" />
     <Compile Include="Native\Ntdll.cs" />

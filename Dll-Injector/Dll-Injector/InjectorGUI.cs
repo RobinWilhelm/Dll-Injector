@@ -83,7 +83,7 @@ namespace Dll_Injector
             tbDllArchitecture.Text = pa_dll.ToString();
         }
            
-        private ProcessArchitecture GetProcessArchitecture()
+        public static ProcessArchitecture GetProcessArchitecture()
         {  
             return (Environment.Is64BitProcess) ? ProcessArchitecture.x64 : ProcessArchitecture.x86;
         }        

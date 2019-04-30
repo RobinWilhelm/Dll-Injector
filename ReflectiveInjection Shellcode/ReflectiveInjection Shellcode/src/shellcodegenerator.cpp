@@ -268,12 +268,17 @@ DWORD WINAPI LoadLibShellcode(ShellcodeInformation* modinfo)
 	//
 	// call Entrypoint
 	//
-	PtrInt dllmainaddress = (PtrInt)module_destination + new_headers->OptionalHeader.AddressOfEntryPoint;	
+	PtrInt dllmainaddress = (PtrInt)module_destination + new_headers->OptionalHeader.AddressOfEntryPoint;		  
 	((DllMainFunction)dllmainaddress)((HINSTANCE)module_destination, DLL_PROCESS_ATTACH, NULL);
 																	
 	return delta;
 }	  	  	 
 					   
+void Call_DllMain() 
+{
+
+}
+
 void END_SHELLCODE(void) {}
 
 void Test()

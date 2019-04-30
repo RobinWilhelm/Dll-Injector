@@ -11,6 +11,7 @@ using Microsoft.Win32.SafeHandles;
 using System.Windows.Forms;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Dll_Injector.Execution;
 
 namespace Dll_Injector.Methods
 {
@@ -59,6 +60,7 @@ namespace Dll_Injector.Methods
         private RadioButton rbCreateThread;
         private RadioButton rbHijackThread;
 
+        CodeExecutionMethod executionMethod;
 
         public ReflectiveInjection() : base()
         {
@@ -81,8 +83,7 @@ namespace Dll_Injector.Methods
             rbCreateThread.TabStop = true;
             rbCreateThread.Text = "Create Thread";
             rbCreateThread.UseVisualStyleBackColor = true;
-            // this method is used by default
-            rbCreateThread.Checked = true;
+            rbCreateThread.Click += rbCreateThread_Click;
 
             rbHijackThread = new RadioButton();
             rbHijackThread.AutoSize = true;
@@ -93,6 +94,7 @@ namespace Dll_Injector.Methods
             rbHijackThread.TabStop = true;
             rbHijackThread.Text = "Capture Thread";
             rbHijackThread.UseVisualStyleBackColor = true;
+            rbHijackThread.Click += rbHijackThread_Click;
 
             threadpanel.Controls.Add(rbCreateThread);
             threadpanel.Controls.Add(rbHijackThread);
@@ -127,8 +129,27 @@ namespace Dll_Injector.Methods
             rbUseShellcode.TabStop = true;
             rbUseShellcode.Text = "Use Shellcode";
             rbUseShellcode.UseVisualStyleBackColor = true;
+
+
+            SetDefaultSettings();
         }
-        
+
+        public void SetDefaultSettings()
+        {
+            rbCreateThread.Checked = true;
+            executionMethod = new RtlCreateUserThreadMethod();
+        }
+
+        private void rbCreateThread_Click(object sender, EventArgs e)
+        {
+            executionMethod = new CreateRemoteThreadMethod();
+        }
+
+        private void rbHijackThread_Click(object sender, EventArgs e)
+        {
+            executionMethod = new HijackThreadMethod();
+        }
+
         public override bool Execute(Process target, string dll_path)
         {
             try
@@ -247,9 +268,9 @@ namespace Dll_Injector.Methods
                         case ProcessArchitecture.x64:
                             PrepareInjectionx64(ref loaderinfo);
                             break;
-                    }            
+                    }
 
-                    if(rbCreateThread.Checked)
+                    /*if(rbCreateThread.Checked)
                     {
                         SafeThreadHandle hthread = RemoteProcessApi.CreateThread(loaderinfo.hProcess, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress, ThreadCreationMethod.RtlCreateUserThread);
 
@@ -267,6 +288,19 @@ namespace Dll_Injector.Methods
                         if(RemoteProcessApi.HijackThread(target, loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress) != 0)
                             success = true;
                     }                                   
+                    */
+
+                    executionMethod.Target = target;
+                    using(SafeThreadHandle hThread = executionMethod.ExecuteNonBlocking(loaderinfo.shellcodeAddress, loaderinfo.shellcodeInfoAddress))
+                    {
+                        if (!hThread.IsInvalid)
+                        {
+                            // imagebase of loaded module
+                            uint hmod = executionMethod.WaitForReturn(hThread, 3000);
+                            if (hmod != 0)
+                                success = true;
+                        }                        
+                    }                   
 
                     // remove traces
                     RemoteProcessApi.FreeMemory(loaderinfo.hProcess, loaderinfo.rawModuleAddress, 0);
@@ -302,11 +336,11 @@ namespace Dll_Injector.Methods
             IntPtr loadFnAddress = hmodule + loaderFnOffset;
 
             IntPtr tmp;
-            IntPtr hthread = Kernel32.CreateRemoteThread(hProcess, IntPtr.Zero, 0, loadFnAddress, IntPtr.Zero, 0, out tmp);
+            //IntPtr hthread = Kernel32.CreateRemoteThread(hProcess, IntPtr.Zero, 0, loadFnAddress, IntPtr.Zero, 0, out tmp);
 
-            if (hthread != IntPtr.Zero)
+           // if (hthread != IntPtr.Zero)
                 return true;
-            else
+           // else
                 return false;
         }
 

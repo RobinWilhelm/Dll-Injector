@@ -46,6 +46,26 @@ namespace Dll_Injector.Utils
             handle.Free();
 
             return theStructure;                                   
-        }    
+        }
+
+        public static void CopyToByteArray<T>(T source, byte[] destination, int offset)
+        {
+            if (destination == null)
+                throw new ArgumentException("Destination array cannot be null");
+
+            int size = Marshal.SizeOf<T>();
+
+            byte[] sourcebytes = BinaryConverter.Serialize<T>(source);
+
+            // check if there is enough space for all the 4 bytes we will copy
+            if (destination.Length < offset + size)
+                throw new ArgumentException("Not enough room in the destination array");
+
+
+            for (int byteoffset = 0; byteoffset < size; byteoffset++)
+            {
+                destination[offset + byteoffset] = sourcebytes[byteoffset];
+            }
+        }
     }
 }

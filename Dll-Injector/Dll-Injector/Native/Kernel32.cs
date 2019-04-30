@@ -254,10 +254,13 @@ namespace Dll_Injector.Native
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern SafeProcessHandle OpenProcess(UInt32 dwDesiredAccess, bool bInheritHandle, UInt32 dwProcessId);
 
-        [DllImport("kernel32.dll")]
+        [DllImport("kernel32.dll", SetLastError = true)]
         public static extern uint GetCurrentProcessId();
         
-        [DllImport("kernel32.dll")]
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern uint GetThreadId(SafeThreadHandle hThread);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool CloseHandle(IntPtr hObject);
 
         [DllImport("kernel32.dll", SetLastError = true)]
