@@ -17,6 +17,7 @@ namespace Dll_Injector.Execution
     {
         ProcessThread capturedThread = null;
         IntPtr addressOfReturn;
+        IntPtr shellcodeAddress;
 
         private void PrepareHijackingx86(SafeThreadHandle hThread, SafeProcessHandle hProcess, IntPtr start, IntPtr param)
         {
@@ -53,7 +54,7 @@ namespace Dll_Injector.Execution
             BinaryConverter.CopyToByteArray((uint)suspendthreadfn, shellcode, 33);
             BinaryConverter.CopyToByteArray((uint)suspendThreadReturn, shellcode, 40);
 
-            IntPtr shellcodeAddress = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, (uint)shellcode.Length, MemoryProtection.ExecuteReadWrite);
+            shellcodeAddress = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, (uint)shellcode.Length, MemoryProtection.ExecuteReadWrite);
             RemoteProcessApi.WriteMemory(hProcess, shellcode, shellcodeAddress);
 
             context.Eip = (UInt32)shellcodeAddress;
@@ -93,14 +94,14 @@ namespace Dll_Injector.Execution
             // prepare shellcode
             BinaryConverter.CopyToByteArray((UInt32)(context.Rip), shellcode, 7);
             BinaryConverter.CopyToByteArray((UInt32)((UInt64)context.Rip >> 32), shellcode, 15);
-            BinaryConverter.CopyToByteArray((UInt64)start, shellcode, 34);
-            BinaryConverter.CopyToByteArray((UInt64)param, shellcode, 44);
-            BinaryConverter.CopyToByteArray((UInt64)addressOfReturn, shellcode, 72);
-            BinaryConverter.CopyToByteArray((UInt64)getCurrentThreadfn, shellcode, 82);
-            BinaryConverter.CopyToByteArray((UInt64)suspendthreadfn, shellcode, 97);
-            BinaryConverter.CopyToByteArray((UInt64)suspendThreadReturn, shellcode, 109);
+            BinaryConverter.CopyToByteArray((UInt64)start, shellcode, 42);
+            BinaryConverter.CopyToByteArray((UInt64)param, shellcode, 52);
+            BinaryConverter.CopyToByteArray((UInt64)addressOfReturn, shellcode, 84);
+            BinaryConverter.CopyToByteArray((UInt64)getCurrentThreadfn, shellcode, 94);
+            BinaryConverter.CopyToByteArray((UInt64)suspendthreadfn, shellcode, 109);
+            BinaryConverter.CopyToByteArray((UInt64)suspendThreadReturn, shellcode, 121);
 
-            IntPtr shellcodeAddress = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, (uint)shellcode.Length, MemoryProtection.ExecuteReadWrite);
+            shellcodeAddress = RemoteProcessApi.AllocateMemory(hProcess, IntPtr.Zero, (uint)shellcode.Length, MemoryProtection.ExecuteReadWrite);
             RemoteProcessApi.WriteMemory(hProcess, shellcode, shellcodeAddress);
 
             context.Rip = (UInt64)shellcodeAddress;
@@ -125,7 +126,6 @@ namespace Dll_Injector.Execution
                 RemoteProcessApi.SuspendProcess(hProcess);
 
                 IntPtr ht = IntPtr.Zero;
-
                 foreach (ProcessThread thread in target.Threads)
                 {
                     // We are just using the first Thread we find
@@ -138,6 +138,8 @@ namespace Dll_Injector.Execution
                     capturedThread = thread;
                     break;
                 }
+
+
 
                 if (ht == IntPtr.Zero)
                 {
@@ -164,12 +166,12 @@ namespace Dll_Injector.Execution
 
         public override uint WaitForReturn(SafeThreadHandle hThread, uint waittime)
         {
-            if(capturedThread == null)
+            if(capturedThread == null || shellcodeAddress == IntPtr.Zero)
             {
                 throw new Exception("capturedhthread was null");
             }
 
-            using (SafeProcessHandle hProcess = target.Open((uint)(ProcessAccessType.PROCESS_SUSPEND_RESUME | ProcessAccessType.PROCESS_VM_READ)))
+            using (SafeProcessHandle hProcess = target.Open((uint)(ProcessAccessType.PROCESS_SUSPEND_RESUME | ProcessAccessType.PROCESS_VM_READ | ProcessAccessType.PROCESS_VM_OPERATION)))
             {
                 // wait until the thread has finished executing our function
                 do
@@ -181,8 +183,9 @@ namespace Dll_Injector.Execution
                     }
                     waittime -= 10;
                 } while (waittime > 0);
-
+                                
                 RemoteProcessApi.ResumeProcess(hProcess);
+                RemoteProcessApi.FreeMemory(hProcess, shellcodeAddress, 0);
 
                 // read and return the returnvalue
                 return RemoteProcessApi.ReadMemory<uint>(hProcess, addressOfReturn);

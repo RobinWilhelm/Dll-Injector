@@ -296,7 +296,7 @@ namespace Dll_Injector.Methods
                         if (!hThread.IsInvalid)
                         {
                             // imagebase of loaded module
-                            uint hmod = executionMethod.WaitForReturn(hThread, 3000);
+                            uint hmod = executionMethod.WaitForReturn(hThread, 5000);
                             if (hmod != 0)
                                 success = true;
                         }                        
