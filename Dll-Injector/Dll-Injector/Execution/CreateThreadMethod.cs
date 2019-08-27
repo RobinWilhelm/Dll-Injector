@@ -39,13 +39,14 @@ namespace Dll_Injector.Execution
             return hThread;
         }
 
-        public override uint WaitForReturn(SafeThreadHandle hThread, uint waittime)
+        public override bool WaitForReturn(SafeThreadHandle hThread, uint waittime, out uint returnValue)
         {
             Kernel32.WaitForSingleObject(hThread, waittime);
             uint exitcode = 0;
-            bool res = Kernel32.GetExitCodeThread(hThread, ref exitcode);
+            bool res = Kernel32.GetExitCodeThread(hThread, ref exitcode);            
+            returnValue = exitcode;
             hThread.Close();
-            return exitcode;
+            return res;
         }
     }
 }

@@ -164,7 +164,7 @@ namespace Dll_Injector.Execution
             }
         }
 
-        public override uint WaitForReturn(SafeThreadHandle hThread, uint waittime)
+        public override bool WaitForReturn(SafeThreadHandle hThread, uint waittime, out uint returnValue)
         {
             if(capturedThread == null || shellcodeAddress == IntPtr.Zero)
             {
@@ -173,12 +173,14 @@ namespace Dll_Injector.Execution
 
             using (SafeProcessHandle hProcess = target.Open((uint)(ProcessAccessType.PROCESS_SUSPEND_RESUME | ProcessAccessType.PROCESS_VM_READ | ProcessAccessType.PROCESS_VM_OPERATION)))
             {
+                bool success = false;                    
                 // wait until the thread has finished executing our function
                 do
                 {
                     Thread.Sleep(10);
                     if (RemoteProcessApi.GetThreadWaitReason(target.Id, capturedThread.Id) == ThreadWaitReason.Suspended)
                     {
+                        success = true;
                         break;
                     }
                     waittime -= 10;
@@ -187,8 +189,9 @@ namespace Dll_Injector.Execution
                 RemoteProcessApi.ResumeProcess(hProcess);
                 RemoteProcessApi.FreeMemory(hProcess, shellcodeAddress, 0);
 
-                // read and return the returnvalue
-                return RemoteProcessApi.ReadMemory<uint>(hProcess, addressOfReturn);
+                // read the returnvalue
+                returnValue = RemoteProcessApi.ReadMemory<uint>(hProcess, addressOfReturn);
+                return success;
             }            
         }
     }

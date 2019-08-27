@@ -97,16 +97,19 @@ namespace Dll_Injector.Methods
 
                     // 5 Thread im Zielprozess erstellen und dort LoadLibrary mit der Adresse als Parameter ausführen  
                     executionMethod.Target = target;
-                    using (SafeThreadHandle hThread = executionMethod.ExecuteNonBlocking(LoadLibraryFn, address))
+                    SafeThreadHandle hThread = executionMethod.ExecuteNonBlocking(LoadLibraryFn, address);
+
+                    if (hThread.IsInvalid)
                     {
-                        if (!hThread.IsInvalid)
-                        {
-                            // imagebase of loaded module
-                            uint hmod = executionMethod.WaitForReturn(hThread, 3000);
-                            if (hmod != 0)
-                                return true;
-                        }
+                        return false;
                     }
+
+                    uint returnval;
+                    if (executionMethod.WaitForReturn(hThread, 5000, out returnval))
+                    {
+                        return true;
+                    }                        
+
                 }
             }
             catch (Exception e)

@@ -24,7 +24,7 @@ namespace Dll_Injector.Execution
             throw new NotImplementedException();
         }
 
-        public virtual uint WaitForReturn(SafeThreadHandle hThread, uint waittime)
+        public virtual bool WaitForReturn(SafeThreadHandle hThread, uint waittime, out uint returnValue)
         {
             throw new NotImplementedException();
         }
